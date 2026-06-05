@@ -1,0 +1,6 @@
+{"version": 2, "width": 80, "height": 24, "timestamp": 1504467315, "title": "Demo", "env": {"SHELL": "/bin/zsh", "TERM": "xterm-256color"}, "theme": {"fg": "#d0d0d0", "bg": "#212121", "palette": "#151515:#ac4142:#7e8e50:#e5b567:#6c99bb:#9f4e85:#7dd6cf:#d0d0d0"}}
+[0.248848, "o", "Hello World"]
+[1.001376, "o", "second line\n"]
+[2.143733, "r", "100x40"]
+[3.500000, "m", "checkpoint"]
+[4.000000, "i", "ls\r"]

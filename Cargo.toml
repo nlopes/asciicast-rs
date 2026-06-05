@@ -10,3 +10,26 @@ documentation = "https://docs.rs/asciicast-rs"
 keywords = ["asciicast", "parser", "asciinema"]
 
 [dependencies]
+chrono = { version = "0.4", default-features = false, features = ["std"], optional = true }
+rgb = "0.8.53"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+
+[features]
+chrono = ["dep:chrono"]
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+wildcard_enum_match_arm = "deny"
+indexing_slicing = "deny"
+fallible_impl_from = "deny"
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+pedantic = { level = "deny", priority = -1 }
+unreachable = "deny"
+todo = "warn"
+unimplemented = "deny"
