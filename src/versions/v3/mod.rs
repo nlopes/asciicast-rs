@@ -9,10 +9,10 @@ use std::io::BufRead;
 use serde::Deserialize;
 
 use crate::{
-    Asciicast, Error,
+    Asciicast, Error, Reader,
     versions::{
-        V3, Version,
-        common::{self, Env, ExitStatus, Resize, Theme},
+        Streamable, V3,
+        common::{Env, ExitStatus, Resize, Theme},
     },
 };
 
@@ -219,14 +219,33 @@ impl Event {
     }
 }
 
+impl Streamable for V3 {
+    const SKIP_COMMENTS: bool = true;
+
+    fn header_version(header: &Header) -> u8 {
+        header.version
+    }
+
+    fn parse_event(line: &str) -> Result<Event, Error> {
+        Event::try_from(serde_json::from_str::<RawEvent>(line)?)
+    }
+}
+
+/// Parse the header of a v3 recording and return a [`Reader`] that streams its
+/// events lazily (skipping `#` comment lines).
+///
+/// A convenience wrapper over [`Reader::open`] that infers the version, so you
+/// can write `v3::stream(reader)` instead of `Reader::<V3, _>::open(reader)`.
+///
+/// # Errors
+///
+/// Returns an [`Error`] if reading the header fails, it is not valid JSON, or
+/// the declared version is not 3.
+pub fn stream<R: BufRead>(reader: R) -> Result<Reader<V3, R>, Error> {
+    Reader::open(reader)
+}
+
 /// Parse a v3 recording from a buffered reader.
 pub(crate) fn parse<R: BufRead>(reader: R) -> Result<Asciicast<V3>, Error> {
-    let (header, events) = common::parse_ndjson(
-        reader,
-        V3::NUMBER,
-        true,
-        |header: &Header| header.version,
-        |line| Event::try_from(serde_json::from_str::<RawEvent>(line)?),
-    )?;
-    Ok(Asciicast { header, events })
+    Reader::<V3, R>::open(reader)?.into_recording()
 }

@@ -8,10 +8,10 @@ use std::io::BufRead;
 use serde::Deserialize;
 
 use crate::{
-    Asciicast, Error,
+    Asciicast, Error, Reader,
     versions::{
-        V2, Version,
-        common::{self, Env, Resize, Theme},
+        Streamable, V2,
+        common::{Env, Resize, Theme},
     },
 };
 
@@ -171,14 +171,33 @@ impl Event {
     }
 }
 
+impl Streamable for V2 {
+    const SKIP_COMMENTS: bool = false;
+
+    fn header_version(header: &Header) -> u8 {
+        header.version
+    }
+
+    fn parse_event(line: &str) -> Result<Event, Error> {
+        Event::try_from(serde_json::from_str::<RawEvent>(line)?)
+    }
+}
+
+/// Parse the header of a v2 recording and return a [`Reader`] that streams its
+/// events lazily.
+///
+/// A convenience wrapper over [`Reader::open`] that infers the version, so you
+/// can write `v2::stream(reader)` instead of `Reader::<V2, _>::open(reader)`.
+///
+/// # Errors
+///
+/// Returns an [`Error`] if reading the header fails, it is not valid JSON, or
+/// the declared version is not 2.
+pub fn stream<R: BufRead>(reader: R) -> Result<Reader<V2, R>, Error> {
+    Reader::open(reader)
+}
+
 /// Parse a v2 recording from a buffered reader.
 pub(crate) fn parse<R: BufRead>(reader: R) -> Result<Asciicast<V2>, Error> {
-    let (header, events) = common::parse_ndjson(
-        reader,
-        V2::NUMBER,
-        false,
-        |header: &Header| header.version,
-        |line| Event::try_from(serde_json::from_str::<RawEvent>(line)?),
-    )?;
-    Ok(Asciicast { header, events })
+    Reader::<V2, R>::open(reader)?.into_recording()
 }

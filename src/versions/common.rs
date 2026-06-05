@@ -1,12 +1,11 @@
 //! Types shared across `asciicast` versions.
 
 use std::collections::BTreeMap;
-use std::io::BufRead;
 
 use rgb::RGB8;
 use serde::{
     Deserialize,
-    de::{self, DeserializeOwned, Deserializer},
+    de::{self, Deserializer},
 };
 
 use crate::Error;
@@ -215,63 +214,6 @@ impl ExitStatus {
     pub fn code(&self) -> i32 {
         self.0
     }
-}
-
-/// Parse a newline-delimited recording (the shared shape of v2 and v3): a header
-/// object on the first non-blank line followed by one event array per line.
-///
-/// The caller supplies the per-version specifics: the expected version, whether
-/// `#`-prefixed comment lines are skipped, how to read the `version` field from
-/// the parsed header, and how to parse a single event line.
-pub(crate) fn parse_ndjson<H, E, R, V, P>(
-    reader: R,
-    expected_version: u8,
-    skip_comments: bool,
-    header_version: V,
-    parse_event: P,
-) -> Result<(H, Vec<E>), Error>
-where
-    H: DeserializeOwned,
-    R: BufRead,
-    V: Fn(&H) -> u8,
-    P: Fn(&str) -> Result<E, Error>,
-{
-    let mut lines = reader.lines();
-
-    let header_line = loop {
-        match lines.next() {
-            Some(line) => {
-                let line = line?;
-                if line.trim().is_empty() {
-                    continue;
-                }
-                break line;
-            }
-            None => return Err(Error::MissingHeader),
-        }
-    };
-
-    let header: H = serde_json::from_str(&header_line)?;
-    let found = header_version(&header);
-    if found != expected_version {
-        return Err(Error::VersionMismatch {
-            expected: expected_version,
-            found,
-        });
-    }
-
-    let mut events = Vec::new();
-    for line in lines {
-        let line = line?;
-        let trimmed = line.trim();
-        // Skip blank lines and, where the format allows them, comment lines.
-        if trimmed.is_empty() || (skip_comments && trimmed.starts_with('#')) {
-            continue;
-        }
-        events.push(parse_event(&line)?);
-    }
-
-    Ok((header, events))
 }
 
 #[cfg(test)]

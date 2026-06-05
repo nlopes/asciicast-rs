@@ -11,10 +11,12 @@ use std::{
 use serde::Deserialize;
 
 mod error;
+mod reader;
 mod versions;
 
 pub use error::Error;
-pub use versions::{V1, V2, V3, Version, common, v1, v2, v3};
+pub use reader::Reader;
+pub use versions::{Streamable, V1, V2, V3, Version, common, v1, v2, v3};
 
 /// A parsed `asciicast` recording of a known version `V`.
 #[derive(Debug, Clone, PartialEq)]
@@ -54,6 +56,26 @@ impl<V: Version> Asciicast<V> {
     /// described by [`Asciicast::from_reader`].
     pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
         V::parse(BufReader::new(File::open(path)?))
+    }
+
+    /// Iterate over the events paired with their absolute time, in seconds since
+    /// the start of the recording.
+    ///
+    /// Each item is `(absolute_seconds, event)`. This normalises the differing
+    /// per-version timing: v1 frame delays and v3 event intervals (relative to
+    /// the previous entry) are accumulated, while v2 event times (already
+    /// absolute) are passed through.
+    pub fn absolute_times(&self) -> impl Iterator<Item = (f64, &V::Event)> {
+        self.events.iter().scan(0.0_f64, |elapsed, event| {
+            let raw = V::event_time(event);
+            let absolute = if V::RELATIVE_TIMING {
+                *elapsed += raw;
+                *elapsed
+            } else {
+                raw
+            };
+            Some((absolute, event))
+        })
     }
 }
 

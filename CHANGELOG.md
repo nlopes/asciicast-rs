@@ -7,8 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- Marked the `EventCode`, `EventPayload`, `ColorError`, and `PaletteError` enums as
-  `#[non_exhaustive]` so future variants can be added without breaking downstream code.
+### Added
+- Stream events from large recordings without loading them all into memory, via
+  `v2::stream` / `v3::stream` (or `Reader`).
+- Get each event's absolute timestamp regardless of version with `absolute_times`, on a
+  parsed recording or a stream.
+
+### Changed
+
+> [!IMPORTANT]
+> `EventCode`, `EventPayload`, `ColorError`, and `PaletteError` are now
+> `#[non_exhaustive]`. If you `match` on any of them, add a wildcard (`_`) arm.
 
 ## [0.1.1] - 2026-06-05
 

@@ -66,6 +66,37 @@ match AsciicastVersioned::from_slice(recording).expect("valid recording") {
 }
 ```
 
+### Streaming events (v2 / v3)
+
+`from_slice`/`from_path`/`from_reader` eagerly collect every event into a `Vec`. For long
+recordings, you can instead use a `Reader` (or wrappers like `v2::stream` and
+`v3::stream`) which yields a `Result<Event, _>` per line as an `Iterator`, so the whole
+recording is never held in memory at once. You can construct one with `Reader::<V, _>::open` or one of the wrappers mentioned.
+
+> [!NOTE]
+> Only the newline-delimited versions (v2, v3) implement `Streamable`, so `Reader<V1, _>` is a compile error (v1 is a single JSON document and is always parsed eagerly).
+
+```rust
+use asciicast_rs::v2;
+
+let recording: &[u8] = b"{\"version\":2,\"width\":80,\"height\":24}\n[0.5,\"o\",\"hi\"]\n";
+let reader = v2::stream(recording).expect("valid v2 header");
+
+println!("{}x{}", reader.header().width, reader.header().height);
+for event in reader {
+    let event = event.expect("valid event");
+    if let Some(text) = event.as_output() {
+        print!("{text}");
+    }
+}
+
+// If you have the stream and want to materialise the eager `Asciicast` you can do:
+let eager = v2::stream(recording)
+    .and_then(|reader| reader.into_recording())
+    .expect("valid v2 recording");
+assert_eq!(eager.events.len(), 1);
+```
+
 ### Working with the parsed data
 
 ```rust
@@ -75,6 +106,28 @@ let recording = b"{\"version\":3,\"term\":{\"cols\":80,\"rows\":24}}\n";
 let cast = Asciicast::<V3>::from_slice(recording).expect("valid v3 recording");
 assert_eq!(cast.header.term.cols, 80);
 ```
+
+### Absolute timestamps
+
+Timing differs by version (see [Data model](#data-model)), so `absolute_times` normalises
+it for you: it pairs each event with its absolute time in seconds since the start,
+accumulating relative entries (v1, v3) and passing v2's already-absolute times through.
+
+```rust
+use asciicast_rs::{Asciicast, V3};
+
+let recording = b"{\"version\":3,\"term\":{\"cols\":80,\"rows\":24}}\n[0.1,\"o\",\"a\"]\n[0.2,\"o\",\"b\"]\n";
+let cast = Asciicast::<V3>::from_slice(recording).expect("valid v3 recording");
+
+for (at, event) in cast.absolute_times() {
+    if let Some(text) = event.as_output() {
+        println!("{at:.3}s: {text}");
+    }
+}
+```
+
+`Reader::absolute_times` is the streaming counterpart, yielding `Result<(f64, Event), _>`
+so you get absolute timestamps without buffering the recording.
 
 ## Data model
 
@@ -86,7 +139,8 @@ assert_eq!(cast.header.term.cols, 80);
 - Shared types live in `asciicast_rs::common` (`Theme`, `Rgb`, `Resize`, `ExitStatus`,
   `Env`, and the colour error types).
 - Timing semantics follow the spec: v2 event `time` is absolute (seconds since start),
-  while v1 frame `delay` and v3 event `interval` are relative to the previous entry.
+  while v1 frame `delay` and v3 event `interval` are relative to the previous entry. Use
+  `Asciicast::absolute_times` to iterate events with a uniform absolute timestamp.
 
 > [!NOTE]
 > In v1, the nomenclature used is attributes and frames instead of header and events (_roughly_). I thought that keeping to header and events across the versions was fine but isn't strictly accurate.
@@ -113,10 +167,10 @@ I needed a parser for `asciicast` files but realized there wasn't one (that I co
 find) that was obvious I should use. More notes on what I found:
 
 - `asciinema` is [built in rust](https://github.com/asciinema/asciinema) but unfortunately
-it doesn't expose the `asciicast` format publicly as a library.
+  it doesn't expose the `asciicast` format publicly as a library.
 
 - There was also a library named [`asciicast`](https://crates.io/crates/asciicast) but
-unfortunately doesn't seem to get any more updates.
+  unfortunately doesn't seem to get any more updates.
 
 Therefore I decided to create this crate to try to become the canonical rust library for
 parsing `asciicast` format. If one day `asciinema` decides to provide a public crate then
