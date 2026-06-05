@@ -1,4 +1,4 @@
-{"version": 3, "term": {"cols": 80, "rows": 24, "type": "xterm-256color", "theme": {"fg": "#d0d0d0", "bg": "#212121", "palette": "#151515:#ac4142:#7e8e50:#e5b567:#6c99bb:#9f4e85:#7dd6cf:#d0d0d0"}}, "timestamp": 1700000000, "title": "Demo v3", "tags": ["demo", "test"]}
+{"version": 3, "term": {"cols": 80, "rows": 24, "type": "xterm-256color", "version": "xterm(389)", "theme": {"fg": "#d0d0d0", "bg": "#212121", "palette": "#151515:#ac4142:#7e8e50:#e5b567:#6c99bb:#9f4e85:#7dd6cf:#d0d0d0"}}, "timestamp": 1700000000, "idle_time_limit": 2.5, "command": "/usr/bin/htop", "title": "Demo v3", "env": {"SHELL": "/bin/zsh", "TERM": "xterm-256color"}, "tags": ["demo", "test"]}
 # a comment line that must be ignored
 [0.100000, "o", "Hello v3"]
 [0.200000, "o", "more\n"]

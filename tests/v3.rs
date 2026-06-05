@@ -26,7 +26,7 @@ fn parses_v3_header_term_and_events() -> Result<(), Error> {
             cols: 80,
             rows: 24,
             r#type: Some("xterm-256color".to_owned()),
-            version: None,
+            version: Some("xterm(389)".to_owned()),
             theme: Some(Theme {
                 fg: Rgb::new(0xd0, 0xd0, 0xd0),
                 bg: Rgb::new(0x21, 0x21, 0x21),
@@ -37,6 +37,16 @@ fn parses_v3_header_term_and_events() -> Result<(), Error> {
     assert_eq!(cast.header.version, 3);
     assert_eq!(cast.header.timestamp, Some(1_700_000_000));
     assert_eq!(cast.header.title.as_deref(), Some("Demo v3"));
+    assert_eq!(cast.header.command.as_deref(), Some("/usr/bin/htop"));
+    assert_eq!(cast.header.idle_time_limit, Some(2.5));
+    assert_eq!(
+        cast.header
+            .env
+            .as_ref()
+            .and_then(|env| env.get("SHELL"))
+            .map(String::as_str),
+        Some("/bin/zsh")
+    );
     assert_eq!(
         cast.header.tags,
         Some(vec!["demo".to_owned(), "test".to_owned()])
