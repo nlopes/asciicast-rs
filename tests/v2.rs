@@ -1,62 +1,96 @@
-// Test code legitimately uses unwrap/indexing and exact-value assertions.
-#![allow(
-    clippy::unwrap_used,
-    clippy::indexing_slicing,
-    clippy::unreadable_literal,
-    clippy::float_cmp
-)]
-
-use asciicast_rs::common::{Resize, Rgb};
-use asciicast_rs::{Asciicast, V2};
+use asciicast_rs::common::{Resize, Rgb, Theme};
+use asciicast_rs::v2::{Event, EventPayload};
+use asciicast_rs::{Asciicast, Error, V2};
 
 const V2_CAST: &str = include_str!("fixtures/v2.cast");
 
 #[test]
-fn parses_v2_header_and_events() {
-    let cast = Asciicast::<V2>::from_slice(V2_CAST.as_bytes()).unwrap();
+fn parses_v2_header_and_events() -> Result<(), Error> {
+    let cast = Asciicast::<V2>::from_slice(V2_CAST.as_bytes())?;
 
     // Header
     assert_eq!(cast.header.version, 2);
     assert_eq!(cast.header.width, 80);
     assert_eq!(cast.header.height, 24);
-    assert_eq!(cast.header.timestamp, Some(1504467315));
+    assert_eq!(cast.header.timestamp, Some(1_504_467_315));
     assert_eq!(cast.header.title.as_deref(), Some("Demo"));
-    let env = cast.header.env.as_ref().unwrap();
-    assert_eq!(env.get("SHELL").map(String::as_str), Some("/bin/zsh"));
-    assert_eq!(env.get("TERM").map(String::as_str), Some("xterm-256color"));
+    assert_eq!(
+        cast.header
+            .env
+            .as_ref()
+            .and_then(|env| env.get("SHELL"))
+            .map(String::as_str),
+        Some("/bin/zsh")
+    );
 
     // Theme: fg/bg and an 8-colour palette parsed into RGB.
-    let theme = cast.header.theme.as_ref().unwrap();
-    assert_eq!(theme.fg, Rgb::new(0xd0, 0xd0, 0xd0));
-    assert_eq!(theme.bg, Rgb::new(0x21, 0x21, 0x21));
+    let palette = vec![
+        Rgb::new(0x15, 0x15, 0x15),
+        Rgb::new(0xac, 0x41, 0x42),
+        Rgb::new(0x7e, 0x8e, 0x50),
+        Rgb::new(0xe5, 0xb5, 0x67),
+        Rgb::new(0x6c, 0x99, 0xbb),
+        Rgb::new(0x9f, 0x4e, 0x85),
+        Rgb::new(0x7d, 0xd6, 0xcf),
+        Rgb::new(0xd0, 0xd0, 0xd0),
+    ];
     assert_eq!(
-        (theme.bg.r(), theme.bg.g(), theme.bg.b()),
-        (0x21, 0x21, 0x21)
+        cast.header.theme,
+        Some(Theme {
+            fg: Rgb::new(0xd0, 0xd0, 0xd0),
+            bg: Rgb::new(0x21, 0x21, 0x21),
+            palette,
+        })
     );
-    assert_eq!(theme.palette.len(), 8);
-    assert_eq!(theme.palette[0], Rgb::new(0x15, 0x15, 0x15));
-    assert_eq!(theme.palette[1], Rgb::new(0xac, 0x41, 0x42));
-    assert_eq!(theme.palette[7], Rgb::new(0xd0, 0xd0, 0xd0));
 
-    // Events: 2x output, resize, marker, input
-    assert_eq!(cast.events.len(), 5);
-
-    assert_eq!(cast.events[0].time, 0.248848);
-    assert_eq!(cast.events[0].as_output(), Some("Hello World"));
-
-    assert_eq!(cast.events[1].as_output(), Some("second line\n"));
-
+    // Events: 2x output, resize, marker, input.
     assert_eq!(
-        cast.events[2].as_resize(),
+        cast.events,
+        vec![
+            Event {
+                time: 0.248_848,
+                payload: EventPayload::Output("Hello World".to_owned()),
+            },
+            Event {
+                time: 1.001_376,
+                payload: EventPayload::Output("second line\n".to_owned()),
+            },
+            Event {
+                time: 2.143_733,
+                payload: EventPayload::Resize(Resize {
+                    cols: 100,
+                    rows: 40,
+                }),
+            },
+            Event {
+                time: 3.5,
+                payload: EventPayload::Marker("checkpoint".to_owned()),
+            },
+            Event {
+                time: 4.0,
+                payload: EventPayload::Input("ls\r".to_owned()),
+            },
+        ]
+    );
+
+    // Accessor coverage.
+    assert_eq!(
+        cast.events.first().and_then(Event::as_output),
+        Some("Hello World")
+    );
+    assert_eq!(
+        cast.events.get(2).and_then(Event::as_resize),
         Some(Resize {
             cols: 100,
             rows: 40
         })
     );
-
-    assert_eq!(cast.events[3].as_marker(), Some("checkpoint"));
-
-    assert_eq!(cast.events[4].as_input(), Some("ls\r"));
+    assert_eq!(
+        cast.events.get(3).and_then(Event::as_marker),
+        Some("checkpoint")
+    );
+    assert_eq!(cast.events.get(4).and_then(Event::as_input), Some("ls\r"));
+    Ok(())
 }
 
 #[test]
@@ -72,8 +106,9 @@ fn rejects_wrong_palette_length() {
 }
 
 #[test]
-fn from_path_matches_from_slice() {
-    let from_path = Asciicast::<V2>::from_path("tests/fixtures/v2.cast").unwrap();
-    let from_slice = Asciicast::<V2>::from_slice(V2_CAST.as_bytes()).unwrap();
+fn from_path_matches_from_slice() -> Result<(), Error> {
+    let from_path = Asciicast::<V2>::from_path("tests/fixtures/v2.cast")?;
+    let from_slice = Asciicast::<V2>::from_slice(V2_CAST.as_bytes())?;
     assert_eq!(from_path, from_slice);
+    Ok(())
 }

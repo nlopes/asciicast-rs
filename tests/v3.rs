@@ -1,60 +1,93 @@
-// Test code legitimately uses unwrap/indexing and exact-value assertions.
-#![allow(
-    clippy::unwrap_used,
-    clippy::indexing_slicing,
-    clippy::unreadable_literal,
-    clippy::float_cmp
-)]
-
-use asciicast_rs::common::Resize;
-use asciicast_rs::{Asciicast, V2, V3};
+use asciicast_rs::common::{Resize, Rgb, Theme};
+use asciicast_rs::v3::{Event, EventCode, EventPayload, Term};
+use asciicast_rs::{Asciicast, Error, V2, V3};
 
 const V3_CAST: &str = include_str!("fixtures/v3.cast");
 const V2_CAST: &str = include_str!("fixtures/v2.cast");
 
 #[test]
-fn parses_v3_header_term_and_events() {
-    let cast = Asciicast::<V3>::from_slice(V3_CAST.as_bytes()).unwrap();
+fn parses_v3_header_term_and_events() -> Result<(), Error> {
+    let cast = Asciicast::<V3>::from_slice(V3_CAST.as_bytes())?;
 
-    // Header + term
+    // Header + term (theme lives under term in v3).
+    let palette = vec![
+        Rgb::new(0x15, 0x15, 0x15),
+        Rgb::new(0xac, 0x41, 0x42),
+        Rgb::new(0x7e, 0x8e, 0x50),
+        Rgb::new(0xe5, 0xb5, 0x67),
+        Rgb::new(0x6c, 0x99, 0xbb),
+        Rgb::new(0x9f, 0x4e, 0x85),
+        Rgb::new(0x7d, 0xd6, 0xcf),
+        Rgb::new(0xd0, 0xd0, 0xd0),
+    ];
+    assert_eq!(
+        cast.header.term,
+        Term {
+            cols: 80,
+            rows: 24,
+            r#type: Some("xterm-256color".to_owned()),
+            version: None,
+            theme: Some(Theme {
+                fg: Rgb::new(0xd0, 0xd0, 0xd0),
+                bg: Rgb::new(0x21, 0x21, 0x21),
+                palette,
+            }),
+        }
+    );
     assert_eq!(cast.header.version, 3);
-    assert_eq!(cast.header.term.cols, 80);
-    assert_eq!(cast.header.term.rows, 24);
-    assert_eq!(cast.header.term.r#type.as_deref(), Some("xterm-256color"));
-    assert_eq!(cast.header.timestamp, Some(1700000000));
+    assert_eq!(cast.header.timestamp, Some(1_700_000_000));
     assert_eq!(cast.header.title.as_deref(), Some("Demo v3"));
     assert_eq!(
         cast.header.tags,
         Some(vec!["demo".to_owned(), "test".to_owned()])
     );
 
-    // Theme lives under term in v3.
-    let theme = cast.header.term.theme.as_ref().unwrap();
-    assert_eq!(theme.palette.len(), 8);
-
-    // The comment line is ignored, leaving 6 events.
+    // The comment line is ignored, leaving 6 events; v3 carries relative intervals.
+    let expected_first_five = vec![
+        Event {
+            interval: 0.1,
+            payload: EventPayload::Output("Hello v3".to_owned()),
+        },
+        Event {
+            interval: 0.2,
+            payload: EventPayload::Output("more\n".to_owned()),
+        },
+        Event {
+            interval: 0.05,
+            payload: EventPayload::Resize(Resize {
+                cols: 120,
+                rows: 30,
+            }),
+        },
+        Event {
+            interval: 0.0,
+            payload: EventPayload::Marker("mark".to_owned()),
+        },
+        Event {
+            interval: 0.3,
+            payload: EventPayload::Input("q".to_owned()),
+        },
+    ];
+    assert_eq!(cast.events.get(..5), Some(expected_first_five.as_slice()));
     assert_eq!(cast.events.len(), 6);
 
-    // v3 carries relative intervals.
-    assert_eq!(cast.events[0].interval, 0.1);
-    assert_eq!(cast.events[0].as_output(), Some("Hello v3"));
-    assert_eq!(cast.events[1].as_output(), Some("more\n"));
+    // The exit status is opaque (no public constructor), so check it via accessors.
+    let last = cast.events.last();
+    assert_eq!(last.map(Event::code), Some(EventCode::Exit));
     assert_eq!(
-        cast.events[2].as_resize(),
-        Some(Resize {
-            cols: 120,
-            rows: 30
-        })
+        last.and_then(Event::as_exit).map(|status| status.code()),
+        Some(0)
     );
-    assert_eq!(cast.events[3].as_marker(), Some("mark"));
-    assert_eq!(cast.events[4].as_input(), Some("q"));
-    assert_eq!(cast.events[5].as_exit().map(|e| e.code()), Some(0));
+    assert_eq!(
+        last.map(|event| event.interval.to_bits()),
+        Some(1.0_f64.to_bits())
+    );
+    Ok(())
 }
 
 #[test]
 fn wrong_version_is_rejected() {
-    // A v2 recording parsed as v3 must fail with a version mismatch.
+    // A v2 recording parsed as v3 must fail, and vice versa.
     assert!(Asciicast::<V3>::from_slice(V2_CAST.as_bytes()).is_err());
-    // And the reverse.
     assert!(Asciicast::<V2>::from_slice(V3_CAST.as_bytes()).is_err());
 }
