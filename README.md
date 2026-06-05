@@ -1,21 +1,19 @@
 # asciicast-rs
 
-A library that provides the [`asciicast` file
-format](https://docs.asciinema.org/manual/asciicast/v3/) data structures, and parsing
-functionality for the various versions (v1, v2, and v3).
+A library to parse [`asciicast` file
+format](https://docs.asciinema.org/manual/asciicast/v3/) files across all `asciicast`
+versions.
 
-## What is this for
+## Versions supported
 
-Purely a way to parse and deserialize `asciicast` formats. We support:
-
-- [asciicast v1 format](https://docs.asciinema.org/manual/asciicast/v1/)
-- [asciicast v2 format](https://docs.asciinema.org/manual/asciicast/v2/)
-- [asciicast v3 format](https://docs.asciinema.org/manual/asciicast/v3/)
+- [`asciicast` v1 format](https://docs.asciinema.org/manual/asciicast/v1/)
+- [`asciicast` v2 format](https://docs.asciinema.org/manual/asciicast/v2/)
+- [`asciicast` v3 format](https://docs.asciinema.org/manual/asciicast/v3/)
 
 ### Why support all 3?
 
-I wanted to be able to parse old files as well for the project that I need this for
-([acdc](https://github.com/nlopes/acdc)).
+I wanted to be able to parse old files as well for another project I'm working on called
+[acdc](https://github.com/nlopes/acdc).
 
 ## Installation
 
@@ -23,7 +21,13 @@ I wanted to be able to parse old files as well for the project that I need this 
 cargo add asciicast-rs
 ```
 
-## Usage
+You can parse from:
+
+- a byte slice using `from_slice`
+- a `BufRead` using `from_reader`
+- a file using `from_path`
+
+They all return `Result<_, asciicast_rs::Error>`.
 
 ### Parsing a known version
 
@@ -32,7 +36,8 @@ The version is part of the type system, so you can parse directly into `Asciicas
 ```rust
 use asciicast_rs::{Asciicast, V2};
 
-let cast = Asciicast::<V2>::from_path("recording.cast")?;
+let recording = b"{\"version\":2,\"width\":80,\"height\":24}\n[0.5,\"o\",\"hello\"]\n";
+let cast = Asciicast::<V2>::from_slice(recording).expect("valid v2 recording");
 
 println!("{}x{}", cast.header.width, cast.header.height);
 for event in &cast.events {
@@ -42,29 +47,32 @@ for event in &cast.events {
 }
 ```
 
+To read from a file instead, use `Asciicast::<V2>::from_path("recording.cast")`.
+
 ### Auto-detecting the version
 
-When the version is not known ahead of time, you can use `AsciicastVersioned`, which
-detects it from the content and yields the matching variant, each wrapping a fully typed
+When the version is not known ahead of time, use `AsciicastVersioned`, which detects it
+from the content and yields the matching variant, each wrapping a fully typed
 `Asciicast<V>`.
 
 ```rust
 use asciicast_rs::AsciicastVersioned;
 
-match AsciicastVersioned::from_path("recording.cast")? {
+let recording = b"{\"version\":2,\"width\":80,\"height\":24}\n";
+match AsciicastVersioned::from_slice(recording).expect("valid recording") {
     AsciicastVersioned::V1(cast) => println!("v1, {} frames", cast.events.len()),
     AsciicastVersioned::V2(cast) => println!("v2, {} events", cast.events.len()),
     AsciicastVersioned::V3(cast) => println!("v3, {} events", cast.events.len()),
 }
 ```
 
-### Parsing from bytes / reader
+### Working with the parsed data
 
 ```rust
 use asciicast_rs::{Asciicast, V3};
 
-let bytes: &[u8] = b"{\"version\":3,\"term\":{\"cols\":80,\"rows\":24}}\n";
-let cast = Asciicast::<V3>::from_slice(bytes)?;
+let recording = b"{\"version\":3,\"term\":{\"cols\":80,\"rows\":24}}\n";
+let cast = Asciicast::<V3>::from_slice(recording).expect("valid v3 recording");
 assert_eq!(cast.header.term.cols, 80);
 ```
 
@@ -81,7 +89,7 @@ assert_eq!(cast.header.term.cols, 80);
   while v1 frame `delay` and v3 event `interval` are relative to the previous entry.
 
 > [!NOTE]
-> In v1, the nomenclature is attributes and frames instead of header and events (_roughly_). I thought that keeping to header and events across any of the versions was fine.
+> In v1, the nomenclature used is attributes and frames instead of header and events (_roughly_). I thought that keeping to header and events across the versions was fine but isn't strictly accurate.
 
 ## Feature flags
 

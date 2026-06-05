@@ -1,22 +1,4 @@
-//! A library to parse `asciicast` files.
-//!
-//! It supports versions v1, v2, and v3.
-//!
-//! # Overview
-//!
-//! [`Asciicast<V>`] is the core type, parameterised by a version marker
-//! ([`V1`], [`V2`], [`V3`]). Use it directly when you know the version:
-//!
-//! ```no_run
-//! use asciicast_rs::{Asciicast, V2};
-//!
-//! let cast = Asciicast::<V2>::from_path("recording.cast")?;
-//! # Ok::<(), asciicast_rs::Error>(())
-//! ```
-//!
-//! When the version is not known ahead of time, [`AsciicastVersioned`]
-//! auto-detects it from the content and yields the matching variant.
-
+#![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 

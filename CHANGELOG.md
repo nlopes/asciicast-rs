@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-06-05
+
+- Improved the README content with details on how to use the library.
+
 ## [0.1.0] - 2026-06-05
 
 - Initial release with support for all 3 formats of `asciicast` (v1, v2, v3)
