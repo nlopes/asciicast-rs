@@ -8,6 +8,9 @@ homepage = "https://github.com/nlopes/asciicast-rs"
 repository = "https://github.com/nlopes/asciicast-rs"
 documentation = "https://docs.rs/asciicast-rs"
 keywords = ["asciicast", "parser", "asciinema"]
+exclude = [
+    "tests/",
+]
 
 [dependencies]
 chrono = { version = "0.4", default-features = false, features = ["std"], optional = true }
