@@ -79,6 +79,7 @@ impl Header {
 
 /// The event type identifier for a v3 event.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[non_exhaustive]
 pub enum EventCode {
     /// Output written to the terminal (`o`).
     #[serde(rename = "o")]
@@ -103,6 +104,7 @@ struct RawEvent(f64, EventCode, String);
 
 /// A typed v3 event payload.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum EventPayload {
     /// Output written to the terminal.
     Output(String),

@@ -19,6 +19,7 @@ pub type Env = BTreeMap<String, String>;
 
 /// The reason a CSS `#rrggbb` colour string could not be parsed.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
 pub enum ColorError {
     /// The string did not start with `#`.
     #[error("colour {input:?} must start with '#'")]
@@ -44,6 +45,7 @@ pub enum ColorError {
 
 /// The reason a theme `palette` string could not be parsed.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
 pub enum PaletteError {
     /// A colour within the palette was invalid.
     #[error("palette colour at index {index}: {source}")]

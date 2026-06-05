@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Marked the `EventCode`, `EventPayload`, `ColorError`, and `PaletteError` enums as
+  `#[non_exhaustive]` so future variants can be added without breaking downstream code.
+
 ## [0.1.1] - 2026-06-05
 
 - Improved the README content with details on how to use the library.
