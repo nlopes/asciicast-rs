@@ -11,7 +11,7 @@ use crate::{
     Asciicast, Error,
     versions::{
         V2, Version,
-        common::{Env, Resize, Theme},
+        common::{self, Env, Resize, Theme},
     },
 };
 
@@ -161,38 +161,12 @@ impl Event {
 
 /// Parse a v2 recording from a buffered reader.
 pub(crate) fn parse<R: BufRead>(reader: R) -> Result<Asciicast<V2>, Error> {
-    let mut lines = reader.lines();
-
-    let header_line = loop {
-        match lines.next() {
-            Some(line) => {
-                let line = line?;
-                if line.trim().is_empty() {
-                    continue;
-                }
-                break line;
-            }
-            None => return Err(Error::MissingHeader),
-        }
-    };
-
-    let header: Header = serde_json::from_str(&header_line)?;
-    if header.version != V2::NUMBER {
-        return Err(Error::VersionMismatch {
-            expected: V2::NUMBER,
-            found: header.version,
-        });
-    }
-
-    let mut events = Vec::new();
-    for line in lines {
-        let line = line?;
-        if line.trim().is_empty() {
-            continue;
-        }
-        let raw: RawEvent = serde_json::from_str(&line)?;
-        events.push(Event::try_from(raw)?);
-    }
-
+    let (header, events) = common::parse_ndjson(
+        reader,
+        V2::NUMBER,
+        false,
+        |header: &Header| header.version,
+        |line| Event::try_from(serde_json::from_str::<RawEvent>(line)?),
+    )?;
     Ok(Asciicast { header, events })
 }

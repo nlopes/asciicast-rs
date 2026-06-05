@@ -1,0 +1,1 @@
+{"version":1,"width":80,"height":24,"duration":5.5,"command":"/bin/bash","title":"v1 demo","env":{"SHELL":"/bin/bash","TERM":"xterm-256color"},"stdout":[[1.0,"hello"],[0.5,"world\n"]]}
