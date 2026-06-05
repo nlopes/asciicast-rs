@@ -44,7 +44,7 @@ pub struct Header {
     pub version: u8,
     /// Terminal information (dimensions, type, theme).
     pub term: Term,
-    /// Unix timestamp of the recording's start.
+    /// Unix timestamp (seconds) of the recording's start.
     #[serde(default)]
     pub timestamp: Option<i64>,
     /// Maximum inactivity duration a player should honour, in seconds.
@@ -65,6 +65,16 @@ pub struct Header {
     /// Categorical tags for the recording.
     #[serde(default)]
     pub tags: Option<Vec<String>>,
+}
+
+#[cfg(feature = "chrono")]
+impl Header {
+    /// The recording's start time as a UTC datetime, if a `timestamp` is present.
+    #[must_use]
+    pub fn timestamp_datetime(&self) -> Option<chrono::DateTime<chrono::Utc>> {
+        self.timestamp
+            .and_then(|seconds| chrono::DateTime::from_timestamp(seconds, 0))
+    }
 }
 
 /// The event type identifier for a v3 event.

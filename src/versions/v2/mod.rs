@@ -27,7 +27,7 @@ pub struct Header {
     pub width: u16,
     /// Terminal height in rows.
     pub height: u16,
-    /// Unix timestamp of the recording's start.
+    /// Unix timestamp (seconds) of the recording's start.
     #[serde(default)]
     pub timestamp: Option<i64>,
     /// Total recording duration in seconds.
@@ -48,6 +48,16 @@ pub struct Header {
     /// Terminal colour scheme.
     #[serde(default)]
     pub theme: Option<Theme>,
+}
+
+#[cfg(feature = "chrono")]
+impl Header {
+    /// The recording's start time as a UTC datetime, if a `timestamp` is present.
+    #[must_use]
+    pub fn timestamp_datetime(&self) -> Option<chrono::DateTime<chrono::Utc>> {
+        self.timestamp
+            .and_then(|seconds| chrono::DateTime::from_timestamp(seconds, 0))
+    }
 }
 
 /// The event type identifier for a v2 event.
