@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-06-06
+
 ### Added
 - Stream events from large recordings without loading them all into memory, via
   `v2::stream` / `v3::stream` (or `Reader`).
@@ -28,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release with support for all 3 formats of `asciicast` (v1, v2, v3)
 
-[Unreleased]: https://github.com/nlopes/asciicast-rs/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/nlopes/asciicast-rs/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/nlopes/asciicast-rs/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/nlopes/asciicast-rs/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/nlopes/asciicast-rs/releases/tag/v0.1.0
