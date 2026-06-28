@@ -9,6 +9,7 @@ use serde::Deserialize;
 
 use crate::{
     Asciicast, Error,
+    source::Source,
     versions::{V1, Version, common::Env},
 };
 
@@ -70,7 +71,22 @@ struct Document {
 
 /// Parse a v1 recording from a buffered reader.
 pub(crate) fn parse<R: BufRead>(reader: R) -> Result<Asciicast<V1>, Error> {
-    let document: Document = serde_json::from_reader(reader)?;
+    // Transparently decode zstd input (a no-op without the `zstd` feature).
+    parse_decompressed(Source::new(reader)?)
+}
+
+/// Parse a v1 recording from an already-decoded reader, skipping zstd detection.
+///
+/// Used by the version-detecting path, which has already wrapped the stream in a
+/// [`Source`] to read the version probe.
+pub(crate) fn parse_decompressed<R: BufRead>(mut reader: R) -> Result<Asciicast<V1>, Error> {
+    // A v1 recording is a single document, so read it all up front. Reading to
+    // completion also forces any decode failure from an enclosing `Source` to
+    // surface here as an I/O error — reported via `Error`'s `From<io::Error>` as
+    // a decompression error — rather than being mislabelled by serde as JSON.
+    let mut bytes = Vec::new();
+    reader.read_to_end(&mut bytes)?;
+    let document: Document = serde_json::from_slice(&bytes)?;
     if document.header.version != V1::NUMBER {
         return Err(Error::VersionMismatch {
             expected: V1::NUMBER,

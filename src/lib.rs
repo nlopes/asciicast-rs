@@ -12,6 +12,7 @@ use serde::Deserialize;
 
 mod error;
 mod reader;
+mod source;
 mod versions;
 
 pub use error::Error;
@@ -105,11 +106,14 @@ impl AsciicastVersioned {
     ///
     /// Returns [`Error::UnknownVersion`] if the declared version is not 1, 2, or
     /// 3, or any error from the matching [`Asciicast::from_reader`].
-    pub fn from_reader<R: BufRead>(mut reader: R) -> Result<Self, Error> {
+    pub fn from_reader<R: BufRead>(reader: R) -> Result<Self, Error> {
         #[derive(Deserialize)]
         struct VersionProbe {
             version: u8,
         }
+
+        // Decompress up front so the version probe reads the underlying JSON.
+        let mut reader = source::Source::new(reader)?;
 
         let mut first_line = String::new();
         reader.read_line(&mut first_line)?;
@@ -123,10 +127,17 @@ impl AsciicastVersioned {
         // Re-feed the consumed first line ahead of the rest of the reader.
         let combined = BufReader::new(Cursor::new(first_line.into_bytes()).chain(reader));
 
+        // The stream is already decoded, so parse without re-detecting zstd
+        // (`Source::plain`): the streamable versions go through a `Reader`, while
+        // v1 (a whole-document format) has its own decoded-input entry point.
         match version {
-            None | Some(1) => Asciicast::<V1>::from_reader(combined).map(Self::V1),
-            Some(2) => Asciicast::<V2>::from_reader(combined).map(Self::V2),
-            Some(3) => Asciicast::<V3>::from_reader(combined).map(Self::V3),
+            None | Some(1) => v1::parse_decompressed(combined).map(Self::V1),
+            Some(2) => Reader::<V2, _>::from_source(source::Source::plain(combined))?
+                .into_recording()
+                .map(Self::V2),
+            Some(3) => Reader::<V3, _>::from_source(source::Source::plain(combined))?
+                .into_recording()
+                .map(Self::V3),
             Some(other) => Err(Error::UnknownVersion(other)),
         }
     }

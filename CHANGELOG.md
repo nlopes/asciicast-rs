@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Read zstd-compressed recordings transparently through every entry point
+  (`from_slice` / `from_reader` / `from_path`, `AsciicastVersioned`, and the streaming
+  `Reader`). Enabled by the default `zstd` feature; opt out with `--no-default-features`.
+
 ## [0.2.0] - 2026-06-06
 
 ### Added

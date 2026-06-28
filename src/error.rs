@@ -6,7 +6,12 @@
 pub enum Error {
     /// An I/O error occurred while reading the input.
     #[error("io error: {0}")]
-    Io(#[from] std::io::Error),
+    Io(#[source] std::io::Error),
+
+    /// The input was zstd-compressed but could not be decoded.
+    #[cfg(feature = "zstd")]
+    #[error("zstd decompression failed: {0}")]
+    Decompress(#[source] Box<dyn std::error::Error + Send + Sync>),
 
     /// The input was not valid JSON for the expected shape.
     #[error("json error: {0}")]
@@ -32,4 +37,26 @@ pub enum Error {
     /// An event's payload could not be parsed (e.g. a malformed resize or exit).
     #[error("malformed event payload: {0}")]
     MalformedEvent(String),
+}
+
+impl From<std::io::Error> for Error {
+    fn from(err: std::io::Error) -> Self {
+        // The streaming zstd decoder surfaces decode failures as `io::Error`s
+        // wrapping a `FrameDecoderError`. Recover those so they are reported as
+        // decompression failures rather than masquerading as plain I/O errors.
+        #[cfg(feature = "zstd")]
+        {
+            let is_decompress = match err.get_ref() {
+                Some(inner) => inner.is::<ruzstd::decoding::errors::FrameDecoderError>(),
+                None => false,
+            };
+            if is_decompress {
+                return match err.into_inner() {
+                    Some(inner) => Self::Decompress(inner),
+                    None => Self::Io(std::io::Error::other("zstd decompression failed")),
+                };
+            }
+        }
+        Self::Io(err)
+    }
 }

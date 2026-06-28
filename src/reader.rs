@@ -4,7 +4,7 @@ use std::io::{BufRead, Lines};
 
 use serde::de::DeserializeOwned;
 
-use crate::{Asciicast, Error, versions::Streamable};
+use crate::{Asciicast, Error, source::Source, versions::Streamable};
 
 /// A lazy reader over a newline-delimited recording.
 ///
@@ -32,7 +32,7 @@ use crate::{Asciicast, Error, versions::Streamable};
 /// ```
 pub struct Reader<V: Streamable, R: BufRead> {
     header: V::Header,
-    lines: Lines<R>,
+    lines: Lines<Source<R>>,
 }
 
 impl<V: Streamable, R: BufRead> Reader<V, R>
@@ -47,7 +47,18 @@ where
     /// Returns an [`Error`] if reading fails, the header is not valid JSON, or
     /// the declared version does not match `V`.
     pub fn open(reader: R) -> Result<Self, Error> {
-        let mut lines = reader.lines();
+        // Transparently decode zstd input (a no-op without the `zstd` feature).
+        Self::from_source(Source::new(reader)?)
+    }
+
+    /// Read and validate the header over an already-built [`Source`].
+    ///
+    /// Shared by [`Reader::open`] and the version-detecting path
+    /// ([`AsciicastVersioned`](crate::AsciicastVersioned)): the latter has
+    /// already decompressed the stream to read the version probe, so it passes a
+    /// [`Source::plain`] to skip a second, redundant zstd detection.
+    pub(crate) fn from_source(source: Source<R>) -> Result<Self, Error> {
+        let mut lines = source.lines();
 
         let header_line = loop {
             match lines.next() {

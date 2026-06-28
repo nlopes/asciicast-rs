@@ -15,12 +15,21 @@ exclude = [
 [dependencies]
 chrono = { version = "0.4", default-features = false, features = ["std"], optional = true }
 rgb = { version = "0.8", default-features = false }
+ruzstd = { version = "0.8", default-features = false, features = ["std"], optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 
+[dev-dependencies]
+# Pure-Rust zstd encoder, used only to build compressed inputs in the zstd
+# tests. Integration tests are separate crates and cannot name the optional
+# `ruzstd` dependency above, so it is repeated here.
+ruzstd = { version = "0.8", default-features = false, features = ["std"] }
+
 [features]
+default = ["zstd"]
 chrono = ["dep:chrono"]
+zstd = ["dep:ruzstd"]
 
 [lints.rust]
 unsafe_code = "forbid"

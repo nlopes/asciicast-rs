@@ -147,6 +147,23 @@ so you get absolute timestamps without buffering the recording.
 
 ## Feature flags
 
+- `zstd` *(on by default)* — transparently reads zstd-compressed recordings. Detection is
+  automatic (the zstd magic bytes) across `from_slice`/`from_reader`/`from_path`,
+  `AsciicastVersioned`, and the streaming `Reader`; uncompressed input is unaffected.
+  Decoding is pure Rust (via [`ruzstd`](https://crates.io/crates/ruzstd)), so there is no C
+  toolchain dependency.
+
+  Decoding is streaming: a `Reader` holds only one event at a time, while the eager `from_*`
+  constructors load the whole recording into memory (just as they do for uncompressed
+  input). Because compressed input can expand greatly, prefer the streaming `Reader` for
+  large or untrusted recordings.
+
+  Opt out for a smaller, JSON-only build:
+
+  ```sh
+  cargo add asciicast-rs --no-default-features
+  ```
+
 - `chrono` *(off by default)* — adds a `timestamp_datetime()` accessor to the v2 and v3
   headers, returning the recording's start time as a `chrono::DateTime<Utc>`:
 
