@@ -101,3 +101,22 @@ fn wrong_version_is_rejected() {
     assert!(Asciicast::<V3>::from_slice(V2_CAST.as_bytes()).is_err());
     assert!(Asciicast::<V2>::from_slice(V3_CAST.as_bytes()).is_err());
 }
+
+#[test]
+fn unknown_event_preserves_complete_code_and_data() -> Result<(), Error> {
+    let data = br#"{"version":3,"term":{"cols":80,"rows":24}}
+[0.5,"subtitle","hello"]
+"#;
+    let cast = Asciicast::<V3>::from_slice(data)?;
+
+    let event = cast.events.first();
+    assert_eq!(event.map(Event::code), Some(EventCode::Unknown));
+    assert_eq!(
+        event.map(|event| &event.payload),
+        Some(&EventPayload::Unknown {
+            code: "subtitle".to_owned(),
+            data: "hello".to_owned(),
+        })
+    );
+    Ok(())
+}

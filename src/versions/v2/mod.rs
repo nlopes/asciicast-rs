@@ -76,11 +76,14 @@ pub enum EventCode {
     /// A terminal resize (`r`).
     #[serde(rename = "r")]
     Resize,
+    /// An event code this crate does not interpret.
+    #[serde(other)]
+    Unknown,
 }
 
 /// The internal wire shape of an event line: `[time, code, data]`.
 #[derive(Deserialize)]
-struct RawEvent(f64, EventCode, String);
+struct RawEvent(f64, String, serde_json::Value);
 
 /// A typed v2 event payload.
 #[derive(Debug, Clone, PartialEq)]
@@ -90,10 +93,17 @@ pub enum EventPayload {
     Output(String),
     /// User keyboard input.
     Input(String),
-    /// A marker with an (possibly empty) label.
+    /// A marker with a (possibly empty) label.
     Marker(String),
     /// A terminal resize to new dimensions.
     Resize(Resize),
+    /// An event whose code is not known to this crate.
+    Unknown {
+        /// The complete event code.
+        code: String,
+        /// The event data as a JSON value.
+        data: serde_json::Value,
+    },
 }
 
 /// A single v2 event.
@@ -112,11 +122,16 @@ impl TryFrom<RawEvent> for Event {
 
     fn try_from(raw: RawEvent) -> Result<Self, Self::Error> {
         let RawEvent(time, code, data) = raw;
-        let payload = match code {
-            EventCode::Output => EventPayload::Output(data),
-            EventCode::Input => EventPayload::Input(data),
-            EventCode::Marker => EventPayload::Marker(data),
-            EventCode::Resize => EventPayload::Resize(Resize::parse(&data)?),
+        let payload = match code.as_str() {
+            "o" => EventPayload::Output(serde_json::from_value(data)?),
+            "i" => EventPayload::Input(serde_json::from_value(data)?),
+            "m" => EventPayload::Marker(serde_json::from_value(data)?),
+            "r" => {
+                let data = serde_json::from_value::<String>(data)?;
+                EventPayload::Resize(Resize::parse(&data)?)
+            }
+            "" => return Err(Error::MalformedEvent("missing event code".to_owned())),
+            _ => EventPayload::Unknown { code, data },
         };
         Ok(Self { time, payload })
     }
@@ -124,6 +139,9 @@ impl TryFrom<RawEvent> for Event {
 
 impl Event {
     /// The event type identifier.
+    ///
+    /// Unknown events return [`EventCode::Unknown`]; their complete code is stored in
+    /// [`EventPayload::Unknown`].
     #[must_use]
     pub fn code(&self) -> EventCode {
         match self.payload {
@@ -131,6 +149,7 @@ impl Event {
             EventPayload::Input(_) => EventCode::Input,
             EventPayload::Marker(_) => EventCode::Marker,
             EventPayload::Resize(_) => EventCode::Resize,
+            EventPayload::Unknown { .. } => EventCode::Unknown,
         }
     }
 
@@ -139,7 +158,10 @@ impl Event {
     pub fn as_output(&self) -> Option<&str> {
         match &self.payload {
             EventPayload::Output(s) => Some(s),
-            EventPayload::Input(_) | EventPayload::Marker(_) | EventPayload::Resize(_) => None,
+            EventPayload::Input(_)
+            | EventPayload::Marker(_)
+            | EventPayload::Resize(_)
+            | EventPayload::Unknown { .. } => None,
         }
     }
 
@@ -148,7 +170,10 @@ impl Event {
     pub fn as_input(&self) -> Option<&str> {
         match &self.payload {
             EventPayload::Input(s) => Some(s),
-            EventPayload::Output(_) | EventPayload::Marker(_) | EventPayload::Resize(_) => None,
+            EventPayload::Output(_)
+            | EventPayload::Marker(_)
+            | EventPayload::Resize(_)
+            | EventPayload::Unknown { .. } => None,
         }
     }
 
@@ -157,7 +182,10 @@ impl Event {
     pub fn as_marker(&self) -> Option<&str> {
         match &self.payload {
             EventPayload::Marker(s) => Some(s),
-            EventPayload::Output(_) | EventPayload::Input(_) | EventPayload::Resize(_) => None,
+            EventPayload::Output(_)
+            | EventPayload::Input(_)
+            | EventPayload::Resize(_)
+            | EventPayload::Unknown { .. } => None,
         }
     }
 
@@ -166,7 +194,10 @@ impl Event {
     pub fn as_resize(&self) -> Option<Resize> {
         match &self.payload {
             EventPayload::Resize(r) => Some(*r),
-            EventPayload::Output(_) | EventPayload::Input(_) | EventPayload::Marker(_) => None,
+            EventPayload::Output(_)
+            | EventPayload::Input(_)
+            | EventPayload::Marker(_)
+            | EventPayload::Unknown { .. } => None,
         }
     }
 }

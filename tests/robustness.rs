@@ -66,6 +66,21 @@ fn malformed_event_line_errors() {
 }
 
 #[test]
+fn known_v2_events_still_require_string_data() {
+    let data = b"{\"version\":2,\"width\":80,\"height\":24}\n[0.0,\"o\",{\"text\":\"hello\"}]\n";
+    assert!(Asciicast::<V2>::from_slice(data).is_err());
+}
+
+#[test]
+fn empty_event_codes_are_rejected() {
+    let v2 = b"{\"version\":2,\"width\":80,\"height\":24}\n[0.0,\"\",\"hello\"]\n";
+    assert!(Asciicast::<V2>::from_slice(v2).is_err());
+
+    let v3 = b"{\"version\":3,\"term\":{\"cols\":80,\"rows\":24}}\n[0.0,\"\",\"hello\"]\n";
+    assert!(Asciicast::<V3>::from_slice(v3).is_err());
+}
+
+#[test]
 fn comments_are_only_a_v3_feature() {
     // A '#' line is a comment in v3 but invalid JSON in the v2 event stream.
     let v3 = b"{\"version\":3,\"term\":{\"cols\":80,\"rows\":24}}\n# a v3 comment\n";

@@ -51,3 +51,23 @@ fn unknown_version_is_rejected() {
         Err(Error::UnknownVersion(9))
     ));
 }
+
+#[test]
+fn detects_versions_with_unknown_events() -> Result<(), Error> {
+    let v2_data =
+        b"{\"version\":2,\"width\":80,\"height\":24}\n[1.0,\"overlay\",{\"text\":\"hello\"}]\n";
+    let v2 = Asciicast::<V2>::from_slice(v2_data)?;
+    assert_eq!(
+        AsciicastVersioned::from_slice(v2_data)?,
+        AsciicastVersioned::V2(v2)
+    );
+
+    let v3_data =
+        b"{\"version\":3,\"term\":{\"cols\":80,\"rows\":24}}\n[0.5,\"subtitle\",\"hello\"]\n";
+    let v3 = Asciicast::<V3>::from_slice(v3_data)?;
+    assert_eq!(
+        AsciicastVersioned::from_slice(v3_data)?,
+        AsciicastVersioned::V3(v3)
+    );
+    Ok(())
+}

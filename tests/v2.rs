@@ -1,5 +1,5 @@
 use asciicast_rs::common::{Resize, Rgb, Theme};
-use asciicast_rs::v2::{Event, EventPayload};
+use asciicast_rs::v2::{Event, EventCode, EventPayload};
 use asciicast_rs::{Asciicast, Error, V2};
 
 const V2_CAST: &str = include_str!("fixtures/v2.cast");
@@ -125,6 +125,25 @@ fn null_environment_values_are_ignored() -> Result<(), Error> {
             .env
             .as_ref()
             .is_some_and(|env| env.contains_key("TERM"))
+    );
+    Ok(())
+}
+
+#[test]
+fn unknown_event_preserves_complete_code_and_json_data() -> Result<(), Error> {
+    let data = br#"{"version":2,"width":80,"height":24}
+[1.25,"overlay",{"text":"hello","position":2}]
+"#;
+    let cast = Asciicast::<V2>::from_slice(data)?;
+
+    let event = cast.events.first();
+    assert_eq!(event.map(Event::code), Some(EventCode::Unknown));
+    assert_eq!(
+        event.map(|event| &event.payload),
+        Some(&EventPayload::Unknown {
+            code: "overlay".to_owned(),
+            data: serde_json::json!({"text": "hello", "position": 2}),
+        })
     );
     Ok(())
 }

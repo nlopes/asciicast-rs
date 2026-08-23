@@ -44,3 +44,19 @@ fn v3_absolute_times_accumulate_intervals() -> Result<(), Error> {
     assert_close(&times, &[0.1, 0.3, 0.35, 0.35, 0.65, 1.65]);
     Ok(())
 }
+
+#[test]
+fn v3_unknown_events_contribute_to_absolute_time() -> Result<(), Error> {
+    let data: &[u8] = b"{\"version\":3,\"term\":{\"cols\":80,\"rows\":24}}\n[0.5,\"subtitle\",\"hello\"]\n[0.25,\"o\",\"world\"]\n";
+
+    let cast = Asciicast::<V3>::from_slice(data)?;
+    let eager_times: Vec<f64> = cast.absolute_times().map(|(time, _)| time).collect();
+    assert_close(&eager_times, &[0.5, 0.75]);
+
+    let streamed_times = v3::stream(data)?
+        .absolute_times()
+        .map(|event| event.map(|(time, _)| time))
+        .collect::<Result<Vec<_>, _>>()?;
+    assert_close(&streamed_times, &[0.5, 0.75]);
+    Ok(())
+}

@@ -96,11 +96,14 @@ pub enum EventCode {
     /// Session exit (`x`).
     #[serde(rename = "x")]
     Exit,
+    /// An event code this crate does not interpret.
+    #[serde(other)]
+    Unknown,
 }
 
 /// The internal wire shape of an event line: `[interval, code, data]`.
 #[derive(Deserialize)]
-struct RawEvent(f64, EventCode, String);
+struct RawEvent(f64, String, String);
 
 /// A typed v3 event payload.
 #[derive(Debug, Clone, PartialEq)]
@@ -110,12 +113,19 @@ pub enum EventPayload {
     Output(String),
     /// User keyboard input.
     Input(String),
-    /// A marker with an (possibly empty) label.
+    /// A marker with a (possibly empty) label.
     Marker(String),
     /// A terminal resize to new dimensions.
     Resize(Resize),
     /// Session exit with a status.
     Exit(ExitStatus),
+    /// An event whose code is not known to this crate.
+    Unknown {
+        /// The complete event code.
+        code: String,
+        /// The event data.
+        data: String,
+    },
 }
 
 /// A single v3 event.
@@ -134,12 +144,14 @@ impl TryFrom<RawEvent> for Event {
 
     fn try_from(raw: RawEvent) -> Result<Self, Self::Error> {
         let RawEvent(interval, code, data) = raw;
-        let payload = match code {
-            EventCode::Output => EventPayload::Output(data),
-            EventCode::Input => EventPayload::Input(data),
-            EventCode::Marker => EventPayload::Marker(data),
-            EventCode::Resize => EventPayload::Resize(Resize::parse(&data)?),
-            EventCode::Exit => EventPayload::Exit(ExitStatus::parse(&data)?),
+        let payload = match code.as_str() {
+            "o" => EventPayload::Output(data),
+            "i" => EventPayload::Input(data),
+            "m" => EventPayload::Marker(data),
+            "r" => EventPayload::Resize(Resize::parse(&data)?),
+            "x" => EventPayload::Exit(ExitStatus::parse(&data)?),
+            "" => return Err(Error::MalformedEvent("missing event code".to_owned())),
+            _ => EventPayload::Unknown { code, data },
         };
         Ok(Self { interval, payload })
     }
@@ -147,6 +159,9 @@ impl TryFrom<RawEvent> for Event {
 
 impl Event {
     /// The event type identifier.
+    ///
+    /// Unknown events return [`EventCode::Unknown`]; their complete code is stored in
+    /// [`EventPayload::Unknown`].
     #[must_use]
     pub fn code(&self) -> EventCode {
         match self.payload {
@@ -155,6 +170,7 @@ impl Event {
             EventPayload::Marker(_) => EventCode::Marker,
             EventPayload::Resize(_) => EventCode::Resize,
             EventPayload::Exit(_) => EventCode::Exit,
+            EventPayload::Unknown { .. } => EventCode::Unknown,
         }
     }
 
@@ -166,7 +182,8 @@ impl Event {
             EventPayload::Input(_)
             | EventPayload::Marker(_)
             | EventPayload::Resize(_)
-            | EventPayload::Exit(_) => None,
+            | EventPayload::Exit(_)
+            | EventPayload::Unknown { .. } => None,
         }
     }
 
@@ -178,7 +195,8 @@ impl Event {
             EventPayload::Output(_)
             | EventPayload::Marker(_)
             | EventPayload::Resize(_)
-            | EventPayload::Exit(_) => None,
+            | EventPayload::Exit(_)
+            | EventPayload::Unknown { .. } => None,
         }
     }
 
@@ -190,7 +208,8 @@ impl Event {
             EventPayload::Output(_)
             | EventPayload::Input(_)
             | EventPayload::Resize(_)
-            | EventPayload::Exit(_) => None,
+            | EventPayload::Exit(_)
+            | EventPayload::Unknown { .. } => None,
         }
     }
 
@@ -202,7 +221,8 @@ impl Event {
             EventPayload::Output(_)
             | EventPayload::Input(_)
             | EventPayload::Marker(_)
-            | EventPayload::Exit(_) => None,
+            | EventPayload::Exit(_)
+            | EventPayload::Unknown { .. } => None,
         }
     }
 
@@ -214,7 +234,8 @@ impl Event {
             EventPayload::Output(_)
             | EventPayload::Input(_)
             | EventPayload::Marker(_)
-            | EventPayload::Resize(_) => None,
+            | EventPayload::Resize(_)
+            | EventPayload::Unknown { .. } => None,
         }
     }
 }

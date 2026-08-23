@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Parse v1 and v2 `env` objects that contain null values, ignoring only the null entries.
+- Parse and preserve unknown v2 and v3 events, including arbitrary JSON data in v2,
+  without affecting v3 relative timing.
 
 ## [0.3.0] - 2026-06-28
 
