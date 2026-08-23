@@ -10,7 +10,10 @@ use serde::Deserialize;
 use crate::{
     Asciicast, Error,
     source::Source,
-    versions::{V1, Version, common::Env},
+    versions::{
+        V1, Version,
+        common::{Env, deserialize_env},
+    },
 };
 
 /// A convenient alias for a fully parsed v1 recording.
@@ -34,7 +37,7 @@ pub struct Header {
     #[serde(default)]
     pub title: Option<String>,
     /// Captured environment variables.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_env")]
     pub env: Option<Env>,
 }
 

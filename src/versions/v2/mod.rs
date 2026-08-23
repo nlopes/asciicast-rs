@@ -11,7 +11,7 @@ use crate::{
     Asciicast, Error, Reader,
     versions::{
         Streamable, V2,
-        common::{Env, Resize, Theme},
+        common::{Env, Resize, Theme, deserialize_env},
     },
 };
 
@@ -43,7 +43,7 @@ pub struct Header {
     #[serde(default)]
     pub title: Option<String>,
     /// Captured environment variables.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_env")]
     pub env: Option<Env>,
     /// Terminal colour scheme.
     #[serde(default)]

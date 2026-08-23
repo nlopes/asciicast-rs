@@ -49,6 +49,29 @@ fn minified_equals_pretty() -> Result<(), Error> {
 }
 
 #[test]
+fn null_environment_values_are_ignored() -> Result<(), Error> {
+    let data = br#"{"version":1,"width":80,"height":24,"duration":0.0,"env":{"SHELL":"/bin/bash","TERM":null},"stdout":[]}"#;
+    let cast = Asciicast::<V1>::from_slice(data)?;
+
+    assert_eq!(
+        cast.header
+            .env
+            .as_ref()
+            .and_then(|env| env.get("SHELL"))
+            .map(String::as_str),
+        Some("/bin/bash")
+    );
+    assert!(
+        !cast
+            .header
+            .env
+            .as_ref()
+            .is_some_and(|env| env.contains_key("TERM"))
+    );
+    Ok(())
+}
+
+#[test]
 fn wrong_version_is_rejected() {
     assert!(Asciicast::<V1>::from_slice(V2_CAST.as_bytes()).is_err());
 }

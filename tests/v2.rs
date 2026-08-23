@@ -106,6 +106,30 @@ fn rejects_wrong_palette_length() {
 }
 
 #[test]
+fn null_environment_values_are_ignored() -> Result<(), Error> {
+    let data = br#"{"version":2,"width":80,"height":24,"env":{"SHELL":"/bin/bash","TERM":null}}
+"#;
+    let cast = Asciicast::<V2>::from_slice(data)?;
+
+    assert_eq!(
+        cast.header
+            .env
+            .as_ref()
+            .and_then(|env| env.get("SHELL"))
+            .map(String::as_str),
+        Some("/bin/bash")
+    );
+    assert!(
+        !cast
+            .header
+            .env
+            .as_ref()
+            .is_some_and(|env| env.contains_key("TERM"))
+    );
+    Ok(())
+}
+
+#[test]
 fn from_path_matches_from_slice() -> Result<(), Error> {
     let from_path = Asciicast::<V2>::from_path("tests/fixtures/v2.cast")?;
     let from_slice = Asciicast::<V2>::from_slice(V2_CAST.as_bytes())?;

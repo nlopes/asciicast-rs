@@ -16,6 +16,18 @@ use crate::Error;
 /// (commonly `TERM` and `SHELL`).
 pub type Env = BTreeMap<String, String>;
 
+pub(crate) fn deserialize_env<'de, D>(deserializer: D) -> Result<Option<Env>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let env = Option::<BTreeMap<String, Option<String>>>::deserialize(deserializer)?;
+    Ok(env.map(|env| {
+        env.into_iter()
+            .filter_map(|(key, value)| value.map(|value| (key, value)))
+            .collect()
+    }))
+}
+
 /// The reason a CSS `#rrggbb` colour string could not be parsed.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[non_exhaustive]
