@@ -3,6 +3,7 @@ use asciicast_rs::{Asciicast, Error, V1};
 
 const V1_PRETTY: &str = include_str!("fixtures/v1.cast");
 const V1_MINIFIED: &str = include_str!("fixtures/v1_minified.cast");
+const V1_MINIMAL: &str = include_str!("fixtures/v1_minimal.cast");
 const V2_CAST: &str = include_str!("fixtures/v2.cast");
 
 #[test]
@@ -12,7 +13,10 @@ fn parses_v1_header_and_frames() -> Result<(), Error> {
     assert_eq!(cast.header.version, 1);
     assert_eq!(cast.header.width, 80);
     assert_eq!(cast.header.height, 24);
-    assert_eq!(cast.header.duration.to_bits(), 5.5_f64.to_bits());
+    assert_eq!(
+        cast.header.duration.map(f64::to_bits),
+        Some(5.5_f64.to_bits())
+    );
     assert_eq!(cast.header.command.as_deref(), Some("/bin/bash"));
     assert_eq!(cast.header.title.as_deref(), Some("v1 demo"));
     assert_eq!(
@@ -45,6 +49,21 @@ fn minified_equals_pretty() -> Result<(), Error> {
     let pretty = Asciicast::<V1>::from_slice(V1_PRETTY.as_bytes())?;
     let minified = Asciicast::<V1>::from_slice(V1_MINIFIED.as_bytes())?;
     assert_eq!(pretty, minified);
+    Ok(())
+}
+
+#[test]
+fn parses_minimal_v1_without_duration() -> Result<(), Error> {
+    let cast = Asciicast::<V1>::from_slice(V1_MINIMAL.as_bytes())?;
+
+    assert_eq!(cast.header.duration, None);
+    assert_eq!(
+        cast.events,
+        vec![Frame {
+            delay: 1.23,
+            data: "hello".to_owned(),
+        }]
+    );
     Ok(())
 }
 

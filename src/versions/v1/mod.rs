@@ -28,8 +28,9 @@ pub struct Header {
     pub width: u16,
     /// Terminal height in rows.
     pub height: u16,
-    /// Total recording duration in seconds.
-    pub duration: f64,
+    /// Total recording duration in seconds, if present.
+    #[serde(default)]
+    pub duration: Option<f64>,
     /// The recorded command.
     #[serde(default)]
     pub command: Option<String>,

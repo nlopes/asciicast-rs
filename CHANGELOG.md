@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+> [!IMPORTANT]
+> `v1::Header::duration` is now `Option<f64>` so callers can handle v1 recordings
+> that omit the duration.
+
 ### Fixed
 - Parse v1 and v2 `env` objects that contain null values, ignoring only the null entries.
 - Parse and preserve unknown v2 and v3 events, including arbitrary JSON data in v2,
