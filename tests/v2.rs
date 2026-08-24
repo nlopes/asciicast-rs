@@ -130,6 +130,15 @@ fn null_environment_values_are_ignored() -> Result<(), Error> {
 }
 
 #[test]
+fn negative_event_times_are_rejected() {
+    for time in ["-0.5", "-0.0"] {
+        let data =
+            format!("{{\"version\":2,\"width\":80,\"height\":24}}\n[{time},\"o\",\"hello\"]\n");
+        assert!(Asciicast::<V2>::from_slice(data.as_bytes()).is_err());
+    }
+}
+
+#[test]
 fn unknown_event_preserves_complete_code_and_json_data() -> Result<(), Error> {
     let data = br#"{"version":2,"width":80,"height":24}
 [1.25,"overlay",{"text":"hello","position":2}]

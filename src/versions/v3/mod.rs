@@ -12,7 +12,7 @@ use crate::{
     Asciicast, Error, Reader,
     versions::{
         Streamable, V3,
-        common::{Env, ExitStatus, Resize, Theme},
+        common::{Env, ExitStatus, Resize, Theme, deserialize_non_negative_f64},
     },
 };
 
@@ -103,7 +103,11 @@ pub enum EventCode {
 
 /// The internal wire shape of an event line: `[interval, code, data]`.
 #[derive(Deserialize)]
-struct RawEvent(f64, String, String);
+struct RawEvent(
+    #[serde(deserialize_with = "deserialize_non_negative_f64")] f64,
+    String,
+    String,
+);
 
 /// A typed v3 event payload.
 #[derive(Debug, Clone, PartialEq)]
@@ -133,7 +137,7 @@ pub enum EventPayload {
 /// `interval` is the number of seconds elapsed since the previous event.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Event {
-    /// Seconds since the previous event.
+    /// Non-negative seconds since the previous event.
     pub interval: f64,
     /// The typed payload for this event.
     pub payload: EventPayload,

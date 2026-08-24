@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Parse v1 and v2 `env` objects that contain null values, ignoring only the null entries.
 - Parse and preserve unknown v2 and v3 events, including arbitrary JSON data in v2,
   without affecting v3 relative timing.
+- Reject negative v1 frame delays, v2 event times, and v3 event intervals, including
+  signed negative zero.
 
 ## [0.3.0] - 2026-06-28
 

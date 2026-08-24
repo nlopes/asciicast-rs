@@ -28,6 +28,17 @@ where
     }))
 }
 
+pub(crate) fn deserialize_non_negative_f64<'de, D>(deserializer: D) -> Result<f64, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = f64::deserialize(deserializer)?;
+    if value.is_sign_negative() {
+        return Err(de::Error::custom("time value must be non-negative"));
+    }
+    Ok(value)
+}
+
 /// The reason a CSS `#rrggbb` colour string could not be parsed.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[non_exhaustive]

@@ -91,6 +91,15 @@ fn null_environment_values_are_ignored() -> Result<(), Error> {
 }
 
 #[test]
+fn negative_frame_delays_are_rejected() {
+    for delay in ["-0.5", "-0.0"] {
+        let data =
+            format!(r#"{{"version":1,"width":80,"height":24,"stdout":[[{delay},"hello"]]}}"#);
+        assert!(Asciicast::<V1>::from_slice(data.as_bytes()).is_err());
+    }
+}
+
+#[test]
 fn wrong_version_is_rejected() {
     assert!(Asciicast::<V1>::from_slice(V2_CAST.as_bytes()).is_err());
 }

@@ -12,7 +12,7 @@ use crate::{
     source::Source,
     versions::{
         V1, Version,
-        common::{Env, deserialize_env},
+        common::{Env, deserialize_env, deserialize_non_negative_f64},
     },
 };
 
@@ -44,7 +44,10 @@ pub struct Header {
 
 /// The internal wire shape of a frame: `[delay, data]`.
 #[derive(Deserialize)]
-struct RawFrame(f64, String);
+struct RawFrame(
+    #[serde(deserialize_with = "deserialize_non_negative_f64")] f64,
+    String,
+);
 
 /// A single v1 output frame.
 ///
@@ -52,7 +55,7 @@ struct RawFrame(f64, String);
 /// the terminal output written at that point.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Frame {
-    /// Seconds since the previous frame.
+    /// Non-negative seconds since the previous frame.
     pub delay: f64,
     /// The terminal output written.
     pub data: String,

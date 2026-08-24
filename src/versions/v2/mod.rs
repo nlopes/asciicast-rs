@@ -11,7 +11,7 @@ use crate::{
     Asciicast, Error, Reader,
     versions::{
         Streamable, V2,
-        common::{Env, Resize, Theme, deserialize_env},
+        common::{Env, Resize, Theme, deserialize_env, deserialize_non_negative_f64},
     },
 };
 
@@ -83,7 +83,11 @@ pub enum EventCode {
 
 /// The internal wire shape of an event line: `[time, code, data]`.
 #[derive(Deserialize)]
-struct RawEvent(f64, String, serde_json::Value);
+struct RawEvent(
+    #[serde(deserialize_with = "deserialize_non_negative_f64")] f64,
+    String,
+    serde_json::Value,
+);
 
 /// A typed v2 event payload.
 #[derive(Debug, Clone, PartialEq)]
@@ -111,7 +115,7 @@ pub enum EventPayload {
 /// `time` is the number of seconds elapsed since the start of the recording.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Event {
-    /// Seconds since the start of the recording.
+    /// Non-negative seconds since the start of the recording.
     pub time: f64,
     /// The typed payload for this event.
     pub payload: EventPayload,

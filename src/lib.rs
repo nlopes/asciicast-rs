@@ -34,7 +34,7 @@ impl<V: Version> Asciicast<V> {
     /// # Errors
     ///
     /// Returns an [`Error`] if reading fails, the input is not valid JSON for
-    /// version `V`, the declared version does not match, or an event payload is
+    /// version `V`, the declared version does not match, or an event is
     /// malformed.
     pub fn from_reader<R: BufRead>(reader: R) -> Result<Self, Error> {
         V::parse(reader)

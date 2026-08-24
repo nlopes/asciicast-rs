@@ -44,7 +44,7 @@ pub trait Version: private::Sealed + Sized {
     /// # Errors
     ///
     /// Returns an [`Error`] if reading fails, the input is not valid JSON, the
-    /// declared version does not match, or an event payload is malformed.
+    /// declared version does not match, or an event is malformed.
     fn parse<R: BufRead>(reader: R) -> Result<Asciicast<Self>, Error>;
 
     /// The raw stored time of an event: its delay/interval for relative-timed

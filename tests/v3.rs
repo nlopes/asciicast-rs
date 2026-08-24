@@ -103,6 +103,16 @@ fn wrong_version_is_rejected() {
 }
 
 #[test]
+fn negative_event_intervals_are_rejected() {
+    for interval in ["-0.5", "-0.0"] {
+        let data = format!(
+            "{{\"version\":3,\"term\":{{\"cols\":80,\"rows\":24}}}}\n[{interval},\"o\",\"hello\"]\n"
+        );
+        assert!(Asciicast::<V3>::from_slice(data.as_bytes()).is_err());
+    }
+}
+
+#[test]
 fn unknown_event_preserves_complete_code_and_data() -> Result<(), Error> {
     let data = br#"{"version":3,"term":{"cols":80,"rows":24}}
 [0.5,"subtitle","hello"]
