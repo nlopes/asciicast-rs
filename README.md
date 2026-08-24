@@ -134,8 +134,9 @@ so you get absolute timestamps without buffering the recording.
 - `Asciicast<V>` is `{ header, events }`, parameterised by a version marker (`V1`, `V2`,
   `V3`).
 - Each version has its own `Header` and event type under `asciicast_rs::{v1, v2, v3}`.
-  Events expose a typed payload plus accessors (`as_output`, `as_input`, `as_marker`,
-  `as_resize`, and also `as_exit` for v3).
+- v1 frames expose `Frame::delay` and `Frame::data` directly. v2 and v3 events expose a
+  typed payload plus accessors (`as_output`, `as_input`, `as_marker`, `as_resize`, and
+  also `as_exit` for v3).
 - Shared types live in `asciicast_rs::common` (`Theme`, `Rgb`, `Resize`, `ExitStatus`,
   `Env`, and the colour error types).
 - Timing semantics follow the spec: v2 event `time` is absolute (seconds since start),
