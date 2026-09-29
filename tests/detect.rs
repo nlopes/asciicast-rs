@@ -6,6 +6,18 @@ const V2_CAST: &str = include_str!("fixtures/v2.cast");
 const V3_CAST: &str = include_str!("fixtures/v3.cast");
 
 #[test]
+fn detects_versions_with_leading_blank_lines() -> Result<(), Error> {
+    for recording in [V1_PRETTY, V1_MINIFIED, V2_CAST, V3_CAST] {
+        let prefixed = format!("\n \t\r\n{recording}");
+        assert_eq!(
+            AsciicastVersioned::from_slice(prefixed.as_bytes())?,
+            AsciicastVersioned::from_slice(recording.as_bytes())?
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn detects_v1_pretty() -> Result<(), Error> {
     let detected = AsciicastVersioned::from_slice(V1_PRETTY.as_bytes())?;
     let typed = Asciicast::<V1>::from_slice(V1_PRETTY.as_bytes())?;

@@ -6,6 +6,19 @@ use serde::de::DeserializeOwned;
 
 use crate::{Asciicast, Error, source::Source, versions::Streamable};
 
+pub(crate) fn read_header_line(reader: &mut impl BufRead) -> Result<String, Error> {
+    let mut line = String::new();
+    loop {
+        if reader.read_line(&mut line)? == 0 {
+            return Err(Error::MissingHeader);
+        }
+        if !line.trim().is_empty() {
+            return Ok(line);
+        }
+        line.clear();
+    }
+}
+
 /// A lazy reader over a newline-delimited recording.
 ///
 /// Create one with [`Reader::open`] (or one of the wrappers [`crate::v2::stream`] /
@@ -57,22 +70,8 @@ where
     /// ([`AsciicastVersioned`](crate::AsciicastVersioned)): the latter has
     /// already decompressed the stream to read the version probe, so it passes a
     /// [`Source::plain`] to skip a second, redundant zstd detection.
-    pub(crate) fn from_source(source: Source<R>) -> Result<Self, Error> {
-        let mut lines = source.lines();
-
-        let header_line = loop {
-            match lines.next() {
-                Some(line) => {
-                    let line = line?;
-                    if line.trim().is_empty() {
-                        continue;
-                    }
-                    break line;
-                }
-                None => return Err(Error::MissingHeader),
-            }
-        };
-
+    pub(crate) fn from_source(mut source: Source<R>) -> Result<Self, Error> {
+        let header_line = read_header_line(&mut source)?;
         let header: V::Header = serde_json::from_str(&header_line)?;
         let found = V::header_version(&header);
         if found != V::NUMBER {
@@ -82,7 +81,10 @@ where
             });
         }
 
-        Ok(Self { header, lines })
+        Ok(Self {
+            header,
+            lines: source.lines(),
+        })
     }
 
     /// The parsed header.

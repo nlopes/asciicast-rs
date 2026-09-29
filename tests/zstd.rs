@@ -35,6 +35,163 @@ fn compress(bytes: &[u8]) -> Vec<u8> {
     compress_to_vec(bytes, CompressionLevel::Fastest)
 }
 
+fn compress_frames(bytes: &[u8]) -> Vec<u8> {
+    bytes.chunks(17).flat_map(compress).collect()
+}
+
+#[test]
+fn concatenated_frames_match_plain_recordings() -> Result<(), Error> {
+    for plain in [V1_CAST, V2_CAST, V3_CAST] {
+        let compressed = compress_frames(plain.as_bytes());
+        assert_eq!(
+            AsciicastVersioned::from_slice(&compressed)?,
+            AsciicastVersioned::from_slice(plain.as_bytes())?
+        );
+    }
+    assert_eq!(
+        Asciicast::<V1>::from_slice(&compress_frames(V1_CAST.as_bytes()))?,
+        Asciicast::<V1>::from_slice(V1_CAST.as_bytes())?
+    );
+    assert_eq!(
+        Asciicast::<V2>::from_slice(&compress_frames(V2_CAST.as_bytes()))?,
+        Asciicast::<V2>::from_slice(V2_CAST.as_bytes())?
+    );
+    assert_eq!(
+        Asciicast::<V3>::from_slice(&compress_frames(V3_CAST.as_bytes()))?,
+        Asciicast::<V3>::from_slice(V3_CAST.as_bytes())?
+    );
+    Ok(())
+}
+
+#[test]
+fn concatenated_frames_preserve_streamed_timing_with_short_reads() -> Result<(), Error> {
+    let compressed = compress_frames(V3_CAST.as_bytes());
+    let reader = std::io::BufReader::new(Trickle(compressed.as_slice()));
+    let events = v3::stream(reader)?
+        .absolute_times()
+        .collect::<Result<Vec<_>, _>>()?;
+    let plain = v3::stream(V3_CAST.as_bytes())?
+        .absolute_times()
+        .collect::<Result<Vec<_>, _>>()?;
+    assert_eq!(events, plain);
+
+    let compressed = compress_frames(V2_CAST.as_bytes());
+    assert_eq!(
+        v2::stream(compressed.as_slice())?.into_recording()?,
+        Asciicast::<V2>::from_slice(V2_CAST.as_bytes())?
+    );
+    Ok(())
+}
+
+#[test]
+fn empty_frames_do_not_end_recording() -> Result<(), Error> {
+    assert!(matches!(
+        Asciicast::<V3>::from_slice(&compress(b"")),
+        Err(Error::MissingHeader)
+    ));
+    let mut compressed = compress(b"");
+    for line in V3_CAST.split_inclusive('\n') {
+        compressed.extend(compress(line.as_bytes()));
+        compressed.extend(compress(b""));
+    }
+    assert_eq!(
+        Asciicast::<V3>::from_slice(&compressed)?,
+        Asciicast::<V3>::from_slice(V3_CAST.as_bytes())?
+    );
+    Ok(())
+}
+
+#[test]
+fn skippable_frames_can_precede_separate_and_follow_data() -> Result<(), Error> {
+    let plain = Asciicast::<V3>::from_slice(V3_CAST.as_bytes())?;
+    for magic in 0x184d_2a50_u32..=0x184d_2a5f {
+        let mut skip = magic.to_le_bytes().to_vec();
+        skip.extend(4_u32.to_le_bytes());
+        skip.extend(b"meta");
+        let mut compressed = skip.clone();
+        for line in V3_CAST.split_inclusive('\n') {
+            compressed.extend(compress(line.as_bytes()));
+            compressed.extend_from_slice(&skip);
+        }
+        let reader = std::io::BufReader::new(Trickle(compressed.as_slice()));
+        assert_eq!(Asciicast::<V3>::from_reader(reader)?, plain);
+        assert_eq!(
+            AsciicastVersioned::from_slice(&compressed)?,
+            AsciicastVersioned::V3(plain.clone())
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn truncated_skippable_frames_are_decompression_errors() {
+    let skip = [0x50, 0x2a, 0x4d, 0x18, 4, 0, 0, 0, b'm'];
+    for length in 4..=skip.len() {
+        let truncated = skip.get(..length).unwrap_or_default();
+        assert!(matches!(
+            Asciicast::<V3>::from_slice(truncated),
+            Err(Error::Decompress(_))
+        ));
+        let mut compressed = compress(V3_CAST.as_bytes());
+        compressed.extend_from_slice(truncated);
+        assert!(matches!(
+            Asciicast::<V3>::from_slice(&compressed),
+            Err(Error::Decompress(_))
+        ));
+    }
+}
+
+#[test]
+fn concatenated_large_frames_are_fully_drained() -> Result<(), Error> {
+    let output = "a".repeat(200_000);
+    let first = format!(
+        "{{\"version\":3,\"term\":{{\"cols\":80,\"rows\":24}}}}\n[0.1,\"o\",\"{output}\"]\n"
+    );
+    let second = format!("[0.2,\"o\",\"{output}\"]\n");
+    let compressed = [compress(first.as_bytes()), compress(second.as_bytes())].concat();
+    assert_eq!(
+        v3::stream(compressed.as_slice())?.into_recording()?,
+        Asciicast::<V3>::from_slice(format!("{first}{second}").as_bytes())?
+    );
+    Ok(())
+}
+
+#[test]
+fn damaged_later_frames_are_decompression_errors() {
+    let mut truncated_header = compress(b"[0.1,\"o\",\"lost\"]\n");
+    truncated_header.truncate(5);
+    let mut truncated_body = compress(b"[0.1,\"o\",\"lost\"]\n");
+    truncated_body.truncate(truncated_body.len() - 1);
+    for suffix in [truncated_header, truncated_body, b"garbage".to_vec()] {
+        for plain in [V1_CAST, V2_CAST, V3_CAST] {
+            let mut compressed = compress(plain.as_bytes());
+            compressed.extend_from_slice(&suffix);
+            assert!(matches!(
+                AsciicastVersioned::from_slice(&compressed),
+                Err(Error::Decompress(_))
+            ));
+        }
+        let mut compressed = compress(V3_CAST.as_bytes());
+        compressed.extend_from_slice(&suffix);
+        assert!(matches!(
+            v3::stream(compressed.as_slice()).and_then(asciicast_rs::Reader::into_recording),
+            Err(Error::Decompress(_))
+        ));
+    }
+}
+
+#[test]
+fn stream_returns_earlier_events_before_a_damaged_frame() -> Result<(), Error> {
+    let header = b"{\"version\":3,\"term\":{\"cols\":80,\"rows\":24}}\n";
+    let event = b"[0.1,\"o\",\"hello\"]\n";
+    let compressed = [compress(header), compress(event), b"garbage".to_vec()].concat();
+    let mut reader = v3::stream(compressed.as_slice())?;
+    let event = reader.next().transpose()?;
+    assert_eq!(event.as_ref().and_then(v3::Event::as_output), Some("hello"));
+    assert!(matches!(reader.next(), Some(Err(Error::Decompress(_)))));
+    Ok(())
+}
+
 #[test]
 fn from_slice_roundtrips_v1() -> Result<(), Error> {
     let from_zstd = Asciicast::<V1>::from_slice(&compress(V1_CAST.as_bytes()))?;

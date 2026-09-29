@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Read all concatenated zstd frames, including empty and skippable frames, and
+  report damaged later frames instead of silently truncating the recording.
+- Skip leading blank lines during version detection, matching the typed parsers.
+
 ## [0.4.0] - 2026-08-24
 
 ### Changed

@@ -98,9 +98,10 @@ impl AsciicastVersioned {
     /// Parse a recording from a buffered reader, detecting its version from the
     /// content.
     ///
-    /// The version is read from the `version` field of the first line. A v1
-    /// recording may be pretty-printed across multiple lines, in which case the
-    /// first line is not a complete JSON object; that case is treated as v1.
+    /// Leading blank lines are skipped. The version is read from the `version`
+    /// field of the first non-blank line. A v1 recording may be pretty-printed
+    /// across multiple lines, in which case that line is not a complete JSON
+    /// object; that case is treated as v1.
     ///
     /// # Errors
     ///
@@ -115,8 +116,7 @@ impl AsciicastVersioned {
         // Decompress up front so the version probe reads the underlying JSON.
         let mut reader = source::Source::new(reader)?;
 
-        let mut first_line = String::new();
-        reader.read_line(&mut first_line)?;
+        let first_line = reader::read_header_line(&mut reader)?;
 
         // A complete first line carries the version; a parse failure means a
         // pretty-printed (multi-line) v1 document whose first line is just `{`.

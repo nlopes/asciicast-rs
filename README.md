@@ -151,6 +151,7 @@ so you get absolute timestamps without buffering the recording.
 - `zstd` *(on by default)* — transparently reads zstd-compressed recordings. Detection is
   automatic (the zstd magic bytes) across `from_slice`/`from_reader`/`from_path`,
   `AsciicastVersioned`, and the streaming `Reader`; uncompressed input is unaffected.
+  Concatenated frames are decoded in order, and skippable metadata frames are ignored.
   Decoding is pure Rust (via [`ruzstd`](https://crates.io/crates/ruzstd)), so there is no C
   toolchain dependency.
 

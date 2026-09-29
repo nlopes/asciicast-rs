@@ -9,17 +9,21 @@
 
 use std::io::{BufRead, Read, Result as IoResult};
 
+#[cfg(feature = "zstd")]
+use ruzstd::decoding::{
+    BlockDecodingStrategy, FrameDecoder,
+    errors::{FrameDecoderError, ReadFrameHeaderError},
+};
+
 use crate::Error;
 
 /// The zstd frame magic number (`0xFD2FB528`, little-endian on the wire).
-///
-/// Only the standard Zstandard frame magic is detected, not skippable-frame
-/// magic (`0x184D2A50..=0x184D2A5F`). Tools that compress recordings emit a
-/// standard frame first, and ruzstd's `StreamingDecoder` errors on a leading
-/// skippable frame rather than skipping it, so detecting one would promise a
-/// decode we cannot deliver.
 #[cfg(feature = "zstd")]
 const ZSTD_MAGIC: [u8; 4] = [0x28, 0xb5, 0x2f, 0xfd];
+
+/// The range of zstd skippable-frame magic numbers.
+#[cfg(feature = "zstd")]
+const ZSTD_SKIPPABLE_FRAME_MAGIC: std::ops::RangeInclusive<u32> = 0x184d_2a50..=0x184d_2a5f;
 
 /// The original reader with the peeked magic-number prefix replayed in front.
 #[cfg(feature = "zstd")]
@@ -27,9 +31,83 @@ type Prefixed<R> = std::io::Chain<std::io::Cursor<Vec<u8>>, R>;
 
 /// A buffered zstd decoder over the (prefix-replayed) reader.
 #[cfg(feature = "zstd")]
-type ZstdReader<R> = std::io::BufReader<
-    ruzstd::decoding::StreamingDecoder<Prefixed<R>, ruzstd::decoding::FrameDecoder>,
->;
+type ZstdReader<R> = std::io::BufReader<ZstdDecoder<Prefixed<R>>>;
+
+/// Reads concatenated zstd frames and skips metadata frames.
+#[cfg(feature = "zstd")]
+pub(crate) struct ZstdDecoder<R> {
+    reader: R,
+    frame: FrameDecoder,
+    finished: bool,
+}
+
+#[cfg(feature = "zstd")]
+impl<R: BufRead> ZstdDecoder<R> {
+    fn new(reader: R) -> IoResult<Self> {
+        let mut decoder = Self {
+            reader,
+            frame: FrameDecoder::new(),
+            finished: false,
+        };
+        decoder.finished = !decoder.start_frame()?;
+        Ok(decoder)
+    }
+
+    fn start_frame(&mut self) -> IoResult<bool> {
+        loop {
+            if self.reader.fill_buf()?.is_empty() {
+                return Ok(false);
+            }
+            match self.frame.init(&mut self.reader) {
+                Ok(()) => return Ok(true),
+                Err(FrameDecoderError::ReadFrameHeaderError(ReadFrameHeaderError::SkipFrame {
+                    length,
+                    ..
+                })) => {
+                    let length = u64::from(length);
+                    let skipped = std::io::copy(
+                        &mut self.reader.by_ref().take(length),
+                        &mut std::io::sink(),
+                    )?;
+                    if skipped != length {
+                        return Err(std::io::Error::other(FrameDecoderError::FailedToSkipFrame));
+                    }
+                }
+                Err(error) => return Err(std::io::Error::other(error)),
+            }
+        }
+    }
+}
+
+#[cfg(feature = "zstd")]
+impl<R: BufRead> Read for ZstdDecoder<R> {
+    fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
+        if buf.is_empty() || self.finished {
+            return Ok(0);
+        }
+        loop {
+            // Drain the decoded bytes before resetting the frame's buffers.
+            if self.frame.is_finished() && self.frame.can_collect() == 0 {
+                self.finished = !self.start_frame()?;
+                if self.finished {
+                    return Ok(0);
+                }
+            }
+            while self.frame.can_collect() < buf.len() && !self.frame.is_finished() {
+                self.frame
+                    .decode_blocks(
+                        &mut self.reader,
+                        BlockDecodingStrategy::UptoBytes(buf.len() - self.frame.can_collect()),
+                    )
+                    .map_err(std::io::Error::other)?;
+            }
+            let read = self.frame.read(buf)?;
+            if read != 0 {
+                return Ok(read);
+            }
+        }
+    }
+}
 
 /// The reader held by [`Source::Plain`]: `R` directly, or `R` with its peeked
 /// prefix replayed in front when zstd detection is compiled in.
@@ -52,13 +130,12 @@ pub(crate) enum Source<R: BufRead> {
 
 impl<R: BufRead> Source<R> {
     /// Wrap `reader`, transparently decoding it when the `zstd` feature is
-    /// enabled and the stream begins with the zstd magic number.
+    /// enabled and the stream begins with a standard or skippable zstd frame.
     ///
     /// # Errors
     ///
-    /// Returns [`Error::Io`] if reading the leading bytes fails, or
-    /// `Error::Decompress` if the input begins with the zstd magic number but
-    /// its frame header cannot be decoded.
+    /// Returns [`Error::Io`] if reading fails, or `Error::Decompress` if a frame
+    /// header or skippable frame is invalid or incomplete.
     // Without the `zstd` feature this can never fail, but the fallible signature
     // is kept so callers are identical in both configurations.
     #[cfg_attr(not(feature = "zstd"), allow(clippy::unnecessary_wraps))]
@@ -74,12 +151,14 @@ impl<R: BufRead> Source<R> {
             (&mut reader)
                 .take(ZSTD_MAGIC.len() as u64)
                 .read_to_end(&mut prefix)?;
-            let is_zstd = prefix.starts_with(&ZSTD_MAGIC);
+            let is_zstd = prefix.starts_with(&ZSTD_MAGIC)
+                || <[u8; 4]>::try_from(prefix.as_slice()).is_ok_and(|bytes| {
+                    ZSTD_SKIPPABLE_FRAME_MAGIC.contains(&u32::from_le_bytes(bytes))
+                });
             // Replay the consumed prefix ahead of the rest of the reader.
             let replayed = std::io::Cursor::new(prefix).chain(reader);
             if is_zstd {
-                let decoder = ruzstd::decoding::StreamingDecoder::new(replayed)
-                    .map_err(|err| Error::Decompress(Box::new(err)))?;
+                let decoder = ZstdDecoder::new(replayed)?;
                 Ok(Self::Zstd(Box::new(std::io::BufReader::new(decoder))))
             } else {
                 Ok(Self::Plain(replayed))
