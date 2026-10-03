@@ -16,7 +16,7 @@ fn empty_input_detection_errors() {
 #[test]
 fn header_only_recording_has_no_events() -> Result<(), Error> {
     let cast = Asciicast::<V2>::from_slice(b"{\"version\":2,\"width\":80,\"height\":24}\n")?;
-    assert!(cast.events.is_empty());
+    assert_eq!(cast.events.len(), 0);
     Ok(())
 }
 
