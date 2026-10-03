@@ -194,3 +194,119 @@ find) that was obvious I should use. More notes on what I found:
 Therefore I decided to create this crate to try to become the canonical rust library for
 parsing `asciicast` format. If one day `asciinema` decides to provide a public crate then
 I'd be happy to stop work here.
+
+## Tests and performance
+
+Run these commands from the repository root. Test and benchmark tools use the
+normal Cargo project and do not change the library's public API or allocator.
+
+### Correctness and memory checks
+
+```sh
+cargo nextest run --all-features
+cargo nextest run --no-default-features
+cargo test --doc --all-features
+cargo test --doc --no-default-features
+```
+
+`tests/properties.rs` checks generated v1/v2/v3 recordings against an independent
+expected event model, including Unicode, escapes, unknown payloads, tiny read
+buffers, event timing, invalid-input recovery, and concatenated zstd frames.
+Keep any discovered failing seeds in `tests/proptest-regressions.txt`.
+
+`tests/allocations.rs` checks that structured events do not allocate per event,
+streaming memory stays bounded, and a reader releases oversized event storage.
+The counting allocator is used only by allocation tests and benchmarks.
+
+### Benchmarks
+
+```sh
+cargo bench --bench parser
+cargo bench --bench parser --no-default-features
+cargo bench --bench allocations -- --save-baseline current
+```
+
+The Criterion suite covers small and large v1/v2/v3 recordings, eager and
+streaming APIs, automatic detection, Unicode, unknown and structured payloads,
+comments, long events, zstd, first-event latency, and different read buffers.
+Timing reports are saved under `target/criterion/`; allocation measurements
+are saved under `target/allocations/`.
+
+Input generation and compression happen outside timing. Parsing, result
+consumption, and result drop are measured. File cases include opening and
+reading a file that is already in the filesystem cache.
+
+For a smoke check without collecting timing statistics:
+
+```sh
+cargo bench --bench parser --all-features -- --test
+cargo bench --bench parser --no-default-features -- --test
+cargo bench --bench allocations --all-features -- --test
+```
+
+Optional real recordings can be supplied with
+`ASCIICAST_BENCH_CORPUS=/absolute/path/to/corpus`. The directory must contain the
+recordings and a `corpus.json` array whose entries have `name`, `version`,
+`events`, `origin`, and `sha256` fields. Entries with `origin: "downloaded"` are
+included, and their hashes are checked. Normal tests need no downloads.
+
+### Compare a commit with its parent
+
+```sh
+scripts/compare.sh psymwmru target/comparison-psymwmru
+```
+
+Replace `psymwmru` with the jj revision to assess. The script exports that
+revision and its parent, applies the same current benchmark and property-test
+tools to both, and finishes compilation before measuring. It requires `jj`,
+Cargo, `jq`, `rg`, and `shasum`. Use a new output directory for each run;
+existing results are not overwritten. An optional third argument filters
+benchmarks with a Criterion regular expression.
+
+The output directory contains `timing/report/index.html`, heap measurements
+and comparison plots under `memory/`, and `before-profile` / `after-profile`
+executables. Source, input, and binary hashes are retained for reproduction.
+
+Heap measurements count allocation calls and peak requested bytes on the
+current thread. They exclude input construction and loading, other threads,
+and allocator metadata. Buffer growth can temporarily hold both old and new
+allocations. These measurements are not process resident memory (RSS).
+
+The script measures the baseline first and the changed version second. For
+small differences, repeat in reverse order on a quiet machine and inspect the
+unchanged UTF-8 and line-scanning controls. CI checks correctness, memory bounds,
+and benchmark smoke tests; it does not enforce elapsed-time thresholds.
+
+### Flamegraphs and process memory
+
+After running the comparison, install the `inferno` command-line tools and
+collect macOS profiles:
+
+```sh
+target/comparison-psymwmru/after-profile --generate target/profile-inputs
+scripts/profile-macos.sh target/comparison-psymwmru/before-profile 3 eager target/profile-inputs/v3-unicode target/profile-before
+scripts/profile-macos.sh target/comparison-psymwmru/after-profile 3 eager target/profile-inputs/v3-unicode target/profile-after
+inferno-diff-folded --normalize target/profile-before/stacks.folded target/profile-after/stacks.folded > target/profile-diff.folded
+inferno-flamegraph target/profile-diff.folded > target/profile-diff.svg
+```
+
+Input generation requires a new directory. The profiling script collects four
+seconds of macOS `sample` output at one-millisecond intervals and saves folded
+stacks and an interactive SVG. `examples/collapse_sample.rs` preserves parent
+samples, merges duplicate paths, and checks the sample total.
+
+Flame widths show relative stack samples. Differential flamegraphs show shifts
+in attribution; use timing measurements to assess speed. macOS sampling can
+include waits.
+
+For peak RSS, run each executable in a fresh process with duration `0` to parse
+once:
+
+```sh
+/usr/bin/time -l target/comparison-psymwmru/before-profile 3 eager target/profile-inputs/v3-unicode 0
+/usr/bin/time -l target/comparison-psymwmru/after-profile 3 eager target/profile-inputs/v3-unicode 0
+```
+
+macOS reports maximum RSS in bytes, including the loaded input, runtime, and
+allocator overhead. On Linux, use `/usr/bin/time -v` (peak RSS in KiB), and
+sample the profile executables with `perf` or `cargo flamegraph`.

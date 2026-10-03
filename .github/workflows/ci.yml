@@ -52,3 +52,17 @@ jobs:
         run: cargo test --doc --all-features --verbose
       - name: Run doc tests - no default features
         run: cargo test --doc --no-default-features --verbose
+
+  benchmarks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --all-targets --no-default-features -- --deny clippy::pedantic
+      - run: cargo test --example collapse_sample
+      - run: cargo bench --bench parser --all-features -- --test
+      - run: cargo bench --bench parser --no-default-features -- --test
+      - run: cargo bench --bench allocations --all-features -- --test

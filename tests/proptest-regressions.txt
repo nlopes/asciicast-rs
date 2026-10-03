@@ -1,0 +1,2 @@
+# Proptest writes failing seeds here. Keep discovered seeds in version control.
+# Add explicit regression tests for failures that need a stable input example.

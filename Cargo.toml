@@ -8,9 +8,7 @@ homepage = "https://github.com/nlopes/asciicast-rs"
 repository = "https://github.com/nlopes/asciicast-rs"
 documentation = "https://docs.rs/asciicast-rs"
 keywords = ["asciicast", "parser", "asciinema"]
-exclude = [
-    "tests/",
-]
+exclude = ["tests/", "benches/", "examples/", "scripts/"]
 
 [dependencies]
 chrono = { version = "0.4", default-features = false, features = ["std"], optional = true }
@@ -27,10 +25,29 @@ git = "https://github.com/rusticstuff/simdutf8"
 rev = "641d57f313df57354246d2b68d4778c092e076c3"
 
 [dev-dependencies]
+allocation-counter = "0.8.1"
+criterion = { version = "0.8.2", default-features = false, features = ["cargo_bench_support", "html_reports", "plotters"] }
+plotters = { version = "0.3.7", default-features = false, features = ["svg_backend"] }
+proptest = { version = "1.11", default-features = false, features = ["std"] }
+rustc-demangle = "0.1.28"
+sha2 = "0.10.9"
+tempfile = "3"
 # Pure-Rust zstd encoder, used only to build compressed inputs in the zstd
 # tests. Integration tests are separate crates and cannot name the optional
 # `ruzstd` dependency above, so it is repeated here.
 ruzstd = { version = "0.9", default-features = false, features = ["std"] }
+
+[[bench]]
+name = "parser"
+harness = false
+
+[[bench]]
+name = "allocations"
+harness = false
+
+[profile.bench]
+debug = 2
+strip = false
 
 [features]
 default = ["zstd"]

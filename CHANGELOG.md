@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   after parsing so streaming readers do not retain them between events.
 - Reduce peak memory when detecting and parsing v1 recordings.
 
+### Added
+- Add Rust benchmarks, property tests, allocation checks, and tooling for
+  comparing parser revisions and collecting flamegraphs.
+
 ## [0.4.1] - 2026-10-03
 
 ### Fixed
