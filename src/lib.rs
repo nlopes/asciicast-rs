@@ -118,27 +118,26 @@ impl AsciicastVersioned {
 
         let first_line = reader::read_header_line(&mut reader)?;
 
-        // A complete first line carries the version; a parse failure means a
-        // pretty-printed (multi-line) v1 document whose first line is just `{`.
-        let version = serde_json::from_str::<VersionProbe>(&first_line)
-            .ok()
-            .map(|probe| probe.version);
+        // An incomplete first line may be a pretty-printed v1 document.
+        let version =
+            serde_json::from_str::<VersionProbe>(&first_line).map_or(1, |probe| probe.version);
+
+        if version == 1 {
+            return v1::parse(reader, first_line.into_bytes()).map(Self::V1);
+        }
 
         // Re-feed the consumed first line ahead of the rest of the reader.
         let combined = BufReader::new(Cursor::new(first_line.into_bytes()).chain(reader));
 
-        // The stream is already decoded, so parse without re-detecting zstd
-        // (`Source::plain`): the streamable versions go through a `Reader`, while
-        // v1 (a whole-document format) has its own decoded-input entry point.
+        // The input is already decoded, so do not detect compression again.
         match version {
-            None | Some(1) => v1::parse_decompressed(combined).map(Self::V1),
-            Some(2) => Reader::<V2, _>::from_source(source::Source::plain(combined))?
+            2 => Reader::<V2, _>::from_source(source::Source::plain(combined))?
                 .into_recording()
                 .map(Self::V2),
-            Some(3) => Reader::<V3, _>::from_source(source::Source::plain(combined))?
+            3 => Reader::<V3, _>::from_source(source::Source::plain(combined))?
                 .into_recording()
                 .map(Self::V3),
-            Some(other) => Err(Error::UnknownVersion(other)),
+            other => Err(Error::UnknownVersion(other)),
         }
     }
 

@@ -11,6 +11,7 @@ dependencies = [
  "ruzstd",
  "serde",
  "serde_json",
+ "simdutf8",
  "thiserror",
 ]
 
@@ -27,6 +28,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1aa79e62e7697b8e29b513a68abacf485adcd1fe8284a4316c5ae868e6633327"
 dependencies = [
  "num-traits",
+]
+
+[[package]]
+name = "flexpect"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "91463e4ffff882636c3bf769011bd013857c57c9485cd0e8f3be0cace23ef7db"
+dependencies = [
+ "rustversion",
 ]
 
 [[package]]
@@ -75,6 +85,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "47b34b781b31e5d73e9fbc8689c70551fd1ade9a19e3e28cfec8580a79290cc4"
 
 [[package]]
+name = "rustversion"
+version = "1.0.23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
+
+[[package]]
 name = "ruzstd"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -121,6 +137,15 @@ dependencies = [
  "serde",
  "serde_core",
  "zmij",
+]
+
+[[package]]
+name = "simdutf8"
+version = "0.1.5"
+source = "git+https://github.com/rusticstuff/simdutf8?rev=641d57f313df57354246d2b68d4778c092e076c3#641d57f313df57354246d2b68d4778c092e076c3"
+dependencies = [
+ "flexpect",
+ "rustversion",
 ]
 
 [[package]]

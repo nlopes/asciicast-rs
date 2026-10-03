@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Reduce temporary allocations when parsing v2 and v3 recordings and improve
+  throughput for Unicode-heavy recordings. Discard oversized event-line buffers
+  after parsing so streaming readers do not retain them between events.
+- Reduce peak memory when detecting and parsing v1 recordings.
+
 ## [0.4.1] - 2026-10-03
 
 ### Fixed

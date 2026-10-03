@@ -4,7 +4,7 @@
 //! followed by one `[interval, code, data]` event array per line. Comment lines
 //! beginning with `#` are ignored.
 
-use std::io::BufRead;
+use std::{borrow::Cow, io::BufRead};
 
 use serde::Deserialize;
 
@@ -103,10 +103,10 @@ pub enum EventCode {
 
 /// The internal wire shape of an event line: `[interval, code, data]`.
 #[derive(Deserialize)]
-struct RawEvent(
+struct RawEvent<'a>(
     #[serde(deserialize_with = "deserialize_non_negative_f64")] f64,
-    String,
-    String,
+    #[serde(borrow)] Cow<'a, str>,
+    #[serde(borrow)] Cow<'a, str>,
 );
 
 /// A typed v3 event payload.
@@ -143,19 +143,22 @@ pub struct Event {
     pub payload: EventPayload,
 }
 
-impl TryFrom<RawEvent> for Event {
+impl TryFrom<RawEvent<'_>> for Event {
     type Error = Error;
 
-    fn try_from(raw: RawEvent) -> Result<Self, Self::Error> {
+    fn try_from(raw: RawEvent<'_>) -> Result<Self, Self::Error> {
         let RawEvent(interval, code, data) = raw;
-        let payload = match code.as_str() {
-            "o" => EventPayload::Output(data),
-            "i" => EventPayload::Input(data),
-            "m" => EventPayload::Marker(data),
+        let payload = match code.as_ref() {
+            "o" => EventPayload::Output(data.into_owned()),
+            "i" => EventPayload::Input(data.into_owned()),
+            "m" => EventPayload::Marker(data.into_owned()),
             "r" => EventPayload::Resize(Resize::parse(&data)?),
             "x" => EventPayload::Exit(ExitStatus::parse(&data)?),
             "" => return Err(Error::MalformedEvent("missing event code".to_owned())),
-            _ => EventPayload::Unknown { code, data },
+            _ => EventPayload::Unknown {
+                code: code.into_owned(),
+                data: data.into_owned(),
+            },
         };
         Ok(Self { interval, payload })
     }

@@ -33,6 +33,17 @@ fn detects_v1_minified() -> Result<(), Error> {
 }
 
 #[test]
+fn detected_v1_rejects_content_after_the_first_line() {
+    for trailing in ["\n[]", "\n{}", "\nnot json"] {
+        let input = format!("{V1_MINIFIED}{trailing}");
+        assert!(matches!(
+            AsciicastVersioned::from_slice(input.as_bytes()),
+            Err(Error::Json(_))
+        ));
+    }
+}
+
+#[test]
 fn detects_v2() -> Result<(), Error> {
     let detected = AsciicastVersioned::from_slice(V2_CAST.as_bytes())?;
     let typed = Asciicast::<V2>::from_slice(V2_CAST.as_bytes())?;

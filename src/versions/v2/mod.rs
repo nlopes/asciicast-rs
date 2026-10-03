@@ -3,7 +3,7 @@
 //! A v2 recording is newline-delimited JSON: a header object on the first line
 //! followed by one `[time, code, data]` event array per line.
 
-use std::io::BufRead;
+use std::{borrow::Cow, io::BufRead};
 
 use serde::Deserialize;
 
@@ -83,9 +83,9 @@ pub enum EventCode {
 
 /// The internal wire shape of an event line: `[time, code, data]`.
 #[derive(Deserialize)]
-struct RawEvent(
+struct RawEvent<'a>(
     #[serde(deserialize_with = "deserialize_non_negative_f64")] f64,
-    String,
+    #[serde(borrow)] Cow<'a, str>,
     serde_json::Value,
 );
 
@@ -121,12 +121,12 @@ pub struct Event {
     pub payload: EventPayload,
 }
 
-impl TryFrom<RawEvent> for Event {
+impl TryFrom<RawEvent<'_>> for Event {
     type Error = Error;
 
-    fn try_from(raw: RawEvent) -> Result<Self, Self::Error> {
+    fn try_from(raw: RawEvent<'_>) -> Result<Self, Self::Error> {
         let RawEvent(time, code, data) = raw;
-        let payload = match code.as_str() {
+        let payload = match code.as_ref() {
             "o" => EventPayload::Output(serde_json::from_value(data)?),
             "i" => EventPayload::Input(serde_json::from_value(data)?),
             "m" => EventPayload::Marker(serde_json::from_value(data)?),
@@ -135,7 +135,10 @@ impl TryFrom<RawEvent> for Event {
                 EventPayload::Resize(Resize::parse(&data)?)
             }
             "" => return Err(Error::MalformedEvent("missing event code".to_owned())),
-            _ => EventPayload::Unknown { code, data },
+            _ => EventPayload::Unknown {
+                code: code.into_owned(),
+                data,
+            },
         };
         Ok(Self { time, payload })
     }

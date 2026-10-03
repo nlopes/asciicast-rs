@@ -20,6 +20,12 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 
+[dependencies.simdutf8]
+# Use the pinned upstream commit locally; publishing uses the registry version.
+version = "0.1.5"
+git = "https://github.com/rusticstuff/simdutf8"
+rev = "641d57f313df57354246d2b68d4778c092e076c3"
+
 [dev-dependencies]
 # Pure-Rust zstd encoder, used only to build compressed inputs in the zstd
 # tests. Integration tests are separate crates and cannot name the optional

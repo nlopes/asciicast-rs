@@ -7,7 +7,7 @@
 use std::fmt::Debug;
 use std::io::BufRead;
 
-use crate::{Asciicast, Error};
+use crate::{Asciicast, Error, source::Source};
 
 pub mod common;
 pub mod v1;
@@ -92,7 +92,7 @@ impl Version for V1 {
     const RELATIVE_TIMING: bool = true;
 
     fn parse<R: BufRead>(reader: R) -> Result<Asciicast<Self>, Error> {
-        v1::parse(reader)
+        v1::parse(Source::new(reader)?, Vec::new())
     }
 
     fn event_time(event: &Self::Event) -> f64 {

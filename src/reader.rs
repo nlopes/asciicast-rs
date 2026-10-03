@@ -1,10 +1,13 @@
 //! A streaming reader for newline-delimited (v2/v3) recordings.
 
-use std::io::{BufRead, Lines};
+use std::io::BufRead;
 
 use serde::de::DeserializeOwned;
 
 use crate::{Asciicast, Error, source::Source, versions::Streamable};
+
+// Larger lines are accepted, but their storage is not retained between events.
+const MAX_RETAINED_LINE_CAPACITY: usize = 64 * 1024;
 
 pub(crate) fn read_header_line(reader: &mut impl BufRead) -> Result<String, Error> {
     let mut line = String::new();
@@ -45,7 +48,8 @@ pub(crate) fn read_header_line(reader: &mut impl BufRead) -> Result<String, Erro
 /// ```
 pub struct Reader<V: Streamable, R: BufRead> {
     header: V::Header,
-    lines: Lines<Source<R>>,
+    source: Source<R>,
+    line: Vec<u8>,
 }
 
 impl<V: Streamable, R: BufRead> Reader<V, R>
@@ -83,7 +87,14 @@ where
 
         Ok(Self {
             header,
-            lines: source.lines(),
+            source,
+            line: if header_line.capacity() > MAX_RETAINED_LINE_CAPACITY {
+                Vec::new()
+            } else {
+                let mut line = header_line.into_bytes();
+                line.clear();
+                line
+            },
         })
     }
 
@@ -136,19 +147,49 @@ impl<V: Streamable, R: BufRead> Iterator for Reader<V, R> {
     type Item = Result<V::Event, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        // `find_map` advances `lines` until the closure yields `Some`, so blank
-        // (and, for v3, comment) lines are skipped without a hand-written loop.
-        self.lines.find_map(|line| {
-            let line = match line {
-                Ok(line) => line,
-                Err(error) => return Some(Err(error.into())),
+        loop {
+            match self.source.read_until(b'\n', &mut self.line) {
+                Ok(0) => {
+                    self.line = Vec::new();
+                    return None;
+                }
+                Err(error) => {
+                    self.line = Vec::new();
+                    return Some(Err(error.into()));
+                }
+                Ok(_) => {}
+            }
+            let Ok(line) = simdutf8::basic::from_utf8(&self.line) else {
+                // Preserve read_line's I/O error details for invalid UTF8.
+                let mut line = String::new();
+                let result = self
+                    .line
+                    .as_slice()
+                    .read_line(&mut line)
+                    .map_err(Error::from)
+                    .and_then(|_| V::parse_event(&line));
+                self.line = Vec::new();
+                return Some(result);
+            };
+            let line = if let Some(line) = line.strip_suffix('\n') {
+                line.strip_suffix('\r').unwrap_or(line)
+            } else {
+                line
             };
             let trimmed = line.trim();
-            if trimmed.is_empty() || (V::SKIP_COMMENTS && trimmed.starts_with('#')) {
+            let event = if trimmed.is_empty() || (V::SKIP_COMMENTS && trimmed.starts_with('#')) {
                 None
             } else {
-                Some(V::parse_event(&line))
+                Some(V::parse_event(line))
+            };
+            if self.line.capacity() > MAX_RETAINED_LINE_CAPACITY {
+                self.line = Vec::new();
+            } else {
+                self.line.clear();
             }
-        })
+            if event.is_some() {
+                return event;
+            }
+        }
     }
 }
