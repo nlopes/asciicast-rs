@@ -1,5 +1,12 @@
 # asciicast-rs
 
+[![CI Status](https://github.com/nlopes/asciicast-rs/workflows/CI/badge.svg)](https://github.com/nlopes/asciicast-rs/actions)
+[![docs.rs](https://docs.rs/asciicast-rs/badge.svg)](https://docs.rs/asciicast-rs)
+[![crates.io](https://img.shields.io/crates/v/asciicast-rs.svg)](https://crates.io/crates/asciicast-rs)
+[![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/nlopes/asciicast-rs/blob/main/LICENSE-MIT)
+[![APACHE licensed](https://img.shields.io/badge/license-APACHE-blue.svg)](https://github.com/nlopes/asciicast-rs/blob/main/LICENSE-APACHE)
+
+
 A library to parse [`asciicast` file
 format](https://docs.asciinema.org/manual/asciicast/v3/) files across all `asciicast`
 versions.
