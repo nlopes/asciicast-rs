@@ -255,6 +255,9 @@ impl Streamable for V3 {
     }
 
     fn parse_event(line: &str) -> Result<Event, Error> {
+        if let Some(raw) = super::text_event::parse(line) {
+            return Event::try_from(RawEvent(raw.time, Cow::Borrowed(raw.code), raw.data));
+        }
         Event::try_from(serde_json::from_str::<RawEvent>(line)?)
     }
 }

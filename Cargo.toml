@@ -12,6 +12,7 @@ exclude = ["tests/", "benches/", "examples/", "scripts/"]
 
 [dependencies]
 chrono = { version = "0.4", default-features = false, features = ["std"], optional = true }
+memchr = "2"
 rgb = { version = "0.8", default-features = false }
 ruzstd = { version = "0.9", default-features = false, features = ["std"], optional = true }
 serde = { version = "1", features = ["derive"] }

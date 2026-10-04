@@ -168,6 +168,40 @@ proptest! {
         prop_assert_eq!(v3.as_ref().ok().and_then(|event| event.as_output().map(|data| (event.interval.to_bits(), data))), expected);
     }
 
+    #[test]
+    fn modified_event_syntax_matches_reference_json(
+        time in 0_u64..u64::MAX,
+        fraction in 0_u64..u64::MAX,
+        exponent in -400_i32..400,
+        data in text(),
+        position in any::<usize>(),
+        replacement in prop::sample::select(vec!['"', '\\', '\0', '\x1f', '\n', ']', ',', ' ', '\u{2003}', '+', '-']),
+        remove in any::<bool>(),
+    ) {
+        let line = format!("[ {time}.{fraction}e{exponent}, \"o\", {} ]", serde_json::to_string(&data)?);
+        let mut characters: Vec<_> = line.chars().collect();
+        let position = position % characters.len();
+        if remove { characters.remove(position); }
+        else { characters.insert(position, replacement); }
+        let line: String = characters.into_iter().collect();
+        let reference: Result<(f64, String, String), _> = serde_json::from_str(&line);
+        let reference = reference.as_ref().ok().filter(|(time, code, _)| !time.is_sign_negative() && !code.is_empty());
+        let v2 = V2::parse_event(&line);
+        let v3 = V3::parse_event(&line);
+        prop_assert_eq!(v2.is_ok(), reference.is_some());
+        prop_assert_eq!(v3.is_ok(), reference.is_some());
+        if let Some((time, code, data)) = reference {
+            let v2 = v2?;
+            let v3 = v3?;
+            prop_assert_eq!(v2.time.to_bits(), time.to_bits());
+            prop_assert_eq!(v3.interval.to_bits(), time.to_bits());
+            if code == "o" {
+                prop_assert_eq!(v2.as_output(), Some(data.as_str()));
+                prop_assert_eq!(v3.as_output(), Some(data.as_str()));
+            }
+        }
+    }
+
     #[cfg(feature = "zstd")]
     #[test]
     fn compressed_and_concatenated_frames_preserve_events(data in text(), capacity in 1_usize..128) {

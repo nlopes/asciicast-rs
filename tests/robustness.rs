@@ -1,4 +1,4 @@
-use asciicast_rs::{Asciicast, AsciicastVersioned, Error, V2, V3};
+use asciicast_rs::{Asciicast, AsciicastVersioned, Error, Streamable, V2, V3};
 
 #[test]
 fn empty_input_is_missing_header() {
@@ -88,4 +88,41 @@ fn comments_are_only_a_v3_feature() {
 
     let v2 = b"{\"version\":2,\"width\":80,\"height\":24}\n# not valid in v2\n";
     assert!(Asciicast::<V2>::from_slice(v2).is_err());
+}
+
+#[test]
+fn text_events_reject_invalid_json_string_syntax() {
+    for payload in [
+        r#""\u00+1""#,
+        r#""\u00-1""#,
+        r#""\u00xz""#,
+        r#""\u00""#,
+        r#""trailing\""#,
+        r#""interior"quote""#,
+        r#""text","extra""#,
+        r#""\uD800""#,
+        r#""\uDC00""#,
+        r#""\q""#,
+    ] {
+        let line = format!("[0.125,\"o\",{payload}]");
+        assert!(V2::parse_event(&line).is_err(), "{line}");
+        assert!(V3::parse_event(&line).is_err(), "{line}");
+    }
+    // Check each control byte at both ends and across vector-sized boundaries.
+    for control in '\0'..='\x1f' {
+        for offset in [0, 1, 7, 8, 15, 16, 31, 32, 63, 64, 127, 128] {
+            let line = format!("[0.125,\"o\",\"{}{control}tail\"]", "x".repeat(offset));
+            assert!(V2::parse_event(&line).is_err(), "{line:?}");
+            assert!(V3::parse_event(&line).is_err(), "{line:?}");
+        }
+    }
+}
+
+#[test]
+fn text_events_accept_json_whitespace_and_escapes() -> Result<(), Error> {
+    let line = " \r\n[\t1.25e-1 \n, \"o\"\t, \"\\\"\\\\\\/\\b\\f\\n\\r\\t\\u001B\\u00e9🚀\"\r ]\n ";
+    let expected = "\"\\/\x08\x0c\n\r\t\x1bé🚀";
+    assert_eq!(V2::parse_event(line)?.as_output(), Some(expected));
+    assert_eq!(V3::parse_event(line)?.as_output(), Some(expected));
+    Ok(())
 }

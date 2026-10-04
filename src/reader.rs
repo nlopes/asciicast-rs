@@ -148,48 +148,74 @@ impl<V: Streamable, R: BufRead> Iterator for Reader<V, R> {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            match self.source.read_until(b'\n', &mut self.line) {
-                Ok(0) => {
-                    self.line = Vec::new();
-                    return None;
-                }
+            let buffer = match self.source.fill_buf() {
+                Ok(buffer) => buffer,
+                Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
                 Err(error) => {
                     self.line = Vec::new();
                     return Some(Err(error.into()));
                 }
-                Ok(_) => {}
-            }
-            let Ok(line) = simdutf8::basic::from_utf8(&self.line) else {
-                // Preserve read_line's I/O error details for invalid UTF8.
-                let mut line = String::new();
-                let result = self
-                    .line
-                    .as_slice()
-                    .read_line(&mut line)
-                    .map_err(Error::from)
-                    .and_then(|_| V::parse_event(&line));
+            };
+            if buffer.is_empty() {
+                let event = if self.line.is_empty() {
+                    None
+                } else {
+                    parse_line::<V>(&self.line)
+                };
                 self.line = Vec::new();
-                return Some(result);
-            };
-            let line = if let Some(line) = line.strip_suffix('\n') {
-                line.strip_suffix('\r').unwrap_or(line)
-            } else {
-                line
-            };
-            let trimmed = line.trim();
-            let event = if trimmed.is_empty() || (V::SKIP_COMMENTS && trimmed.starts_with('#')) {
-                None
-            } else {
-                Some(V::parse_event(line))
-            };
-            if self.line.capacity() > MAX_RETAINED_LINE_CAPACITY {
-                self.line = Vec::new();
-            } else {
-                self.line.clear();
+                return event;
             }
+            let Some(end) = memchr::memchr(b'\n', buffer) else {
+                self.line.extend_from_slice(buffer);
+                let consumed = buffer.len();
+                self.source.consume(consumed);
+                continue;
+            };
+            let consumed = end + 1;
+            let (line, _) = buffer.split_at(consumed);
+            // Most events fit in the input buffer. Parse them in place, copying
+            // only lines that cross a buffer boundary into the spill buffer.
+            let event = if self.line.is_empty() {
+                parse_line::<V>(line)
+            } else {
+                self.line.extend_from_slice(line);
+                let event = parse_line::<V>(&self.line);
+                if self.line.capacity() > MAX_RETAINED_LINE_CAPACITY {
+                    self.line = Vec::new();
+                } else {
+                    self.line.clear();
+                }
+                event
+            };
+            self.source.consume(consumed);
             if event.is_some() {
                 return event;
             }
         }
+    }
+}
+
+fn parse_line<V: Streamable>(mut bytes: &[u8]) -> Option<Result<V::Event, Error>> {
+    let Ok(line) = simdutf8::basic::from_utf8(bytes) else {
+        // Preserve read_line's I/O error details for invalid UTF8, including
+        // invalid bytes in comments and whitespace-only lines.
+        let mut line = String::new();
+        return Some(
+            bytes
+                .read_line(&mut line)
+                .map_err(Error::from)
+                .and_then(|_| V::parse_event(&line)),
+        );
+    };
+    let line = if let Some(line) = line.strip_suffix('\n') {
+        line.strip_suffix('\r').unwrap_or(line)
+    } else {
+        line
+    };
+    let trimmed = line.trim();
+    if trimmed.is_empty() || (V::SKIP_COMMENTS && trimmed.starts_with('#')) {
+        None
+    } else {
+        Some(V::parse_event(line))
     }
 }

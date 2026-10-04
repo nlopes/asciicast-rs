@@ -10,6 +10,7 @@ use std::io::BufRead;
 use crate::{Asciicast, Error, source::Source};
 
 pub mod common;
+mod text_event;
 pub mod v1;
 pub mod v2;
 pub mod v3;

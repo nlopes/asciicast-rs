@@ -104,6 +104,13 @@ let eager = v2::stream(recording)
 assert_eq!(eager.events.len(), 1);
 ```
 
+For throughput, build your application with `--release` and pass a buffered
+source (for example, `BufReader<File>`). Complete event lines are parsed directly
+from that buffer; only lines spanning buffers need temporary line storage.
+Common text events decode escapes directly into the returned string in one
+allocation. Eager v2/v3 parsing uses the same parser, then collects the events.
+The returned events still own their data and remain valid after the reader advances.
+
 ### Working with the parsed data
 
 ```rust
@@ -239,9 +246,40 @@ comments, long events, zstd, first-event latency, and different read buffers.
 Timing reports are saved under `target/criterion/`; allocation measurements
 are saved under `target/allocations/`.
 
+Throughput is reported in input bytes per second (MiB/s or GiB/s). For zstd cases
+these are **compressed** bytes, so compare parsing speed using elapsed time for
+the same recording, or divide its uncompressed size by that time.
+
 Input generation and compression happen outside timing. Parsing, result
 consumption, and result drop are measured. File cases include opening and
 reading a file that is already in the filesystem cache.
+
+Example throughput on an Intel Core i5-12600K with rustc 1.95.0, default features,
+and the bench profile, compared with commit `5d0a306`. These are synthetic inputs
+from `benches/support`; MB/s below uses decimal megabytes. Results depend on the
+machine and recording.
+
+| Streaming case | Before (MB/s) | After (MB/s) | Speedup |
+| --- | ---: | ---: | ---: |
+| v2 mixed, 100,000 events, byte slice | 414 | 823 | 1.99× |
+| v3 mixed, 1,000,000 events, byte slice | 432 | 775 | 1.80× |
+| v2 mixed, cached file | 388 | 763 | 1.96× |
+| v3 mixed, cached file | 390 | 686 | 1.76× |
+| v2 Unicode, 10,000 events | 805 | 1,613 | 2.00× |
+| v3 Unicode, 10,000 events | 871 | 1,625 | 1.86× |
+
+The million-event v3 case drops from 4.30 million to 0.98 million allocations.
+Escaped strings reserve their encoded length to avoid growth while decoding;
+this raised peak requested heap for that eager case by about 5%, while streaming
+heap usage decreased. Uncommon event shapes and Unicode escapes outside
+`\u00XX` retain the general serde parser. Numeric parsing always uses serde to
+preserve timestamp rounding and validation.
+
+To measure the main streaming cases locally:
+
+```sh
+cargo bench --bench parser -- 'parser/v[23]-(large|unicode)/(stream|stream-file)$'
+```
 
 For a smoke check without collecting timing statistics:
 

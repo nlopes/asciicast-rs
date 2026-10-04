@@ -66,6 +66,60 @@ fn preserves_a_final_event_without_a_newline() -> Result<(), Error> {
     Ok(())
 }
 
+#[test]
+fn every_buffer_boundary_preserves_events_and_skipped_lines() -> Result<(), Error> {
+    let lines = concat!(
+        "\u{2003}\r\n\t# comment with 🚀\r\n",
+        "[0.1,\"o\",\"café 🚀\\r\\n\"]\r\n",
+        "[0.2,\"o\",\"\\u001b[32mgreen\\u001b[0m\"]\n",
+        " \u{2003}\n[0.3,\"o\",\"last\"]"
+    );
+    let input = [HEADER, lines.as_bytes()].concat();
+    let expected = v3::stream(input.as_slice())?.collect::<Result<Vec<_>, _>>()?;
+    assert_eq!(expected.len(), 3);
+    for capacity in 1..=input.len() {
+        let reader = BufReader::with_capacity(capacity, input.as_slice());
+        assert_eq!(
+            v3::stream(reader)?.collect::<Result<Vec<_>, _>>()?,
+            expected,
+            "buffer capacity {capacity}"
+        );
+    }
+    Ok(())
+}
+
+struct InterruptedOnce {
+    interrupted: bool,
+    remaining: Cursor<&'static [u8]>,
+}
+
+impl Read for InterruptedOnce {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        if !self.interrupted {
+            self.interrupted = true;
+            return Err(io::ErrorKind::Interrupted.into());
+        }
+        self.remaining.read(buffer)
+    }
+}
+
+#[test]
+fn interrupted_reads_preserve_a_partial_event() -> Result<(), Error> {
+    let prefix = [HEADER, b"[0.1,\"o\",\"par"].concat();
+    let tail = InterruptedOnce {
+        interrupted: false,
+        remaining: Cursor::new(b"tial\"]\n[0.2,\"o\",\"next\"]"),
+    };
+    let input = Cursor::new(prefix).chain(tail);
+    let events = v3::stream(BufReader::with_capacity(8, input))?.collect::<Result<Vec<_>, _>>()?;
+    let output: Vec<_> = events
+        .iter()
+        .filter_map(|event| event.as_output())
+        .collect();
+    assert_eq!(output, ["partial", "next"]);
+    Ok(())
+}
+
 struct FailsOnce {
     state: u8,
     remaining: Cursor<&'static [u8]>,

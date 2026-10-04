@@ -217,6 +217,22 @@ impl Streamable for V2 {
     }
 
     fn parse_event(line: &str) -> Result<Event, Error> {
+        if let Some(raw) = super::text_event::parse(line) {
+            let payload = match raw.code {
+                "o" => EventPayload::Output(raw.data.into_owned()),
+                "i" => EventPayload::Input(raw.data.into_owned()),
+                "m" => EventPayload::Marker(raw.data.into_owned()),
+                "r" => EventPayload::Resize(Resize::parse(&raw.data)?),
+                _ => EventPayload::Unknown {
+                    code: raw.code.to_owned(),
+                    data: serde_json::Value::String(raw.data.into_owned()),
+                },
+            };
+            return Ok(Event {
+                time: raw.time,
+                payload,
+            });
+        }
         Event::try_from(serde_json::from_str::<RawEvent>(line)?)
     }
 }

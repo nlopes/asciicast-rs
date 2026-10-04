@@ -47,7 +47,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let files = tempfile::tempdir()?;
     for case in support::recordings()? {
         let mut group = criterion.benchmark_group(format!("parser/{}", case.name));
-        group.throughput(Throughput::Elements(u64::try_from(case.events)?));
+        // For zstd cases this is compressed input throughput. Plain cases
+        // report JSON bytes, allowing comparison across event sizes.
+        group.throughput(Throughput::Bytes(u64::try_from(case.bytes.len())?));
         let apis: &[&str] = if case.version == 1 {
             &["eager", "auto"]
         } else {
