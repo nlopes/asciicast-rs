@@ -1,0 +1,68 @@
+[
+  {
+    "name": "typing-v2.cast",
+    "version": 2,
+    "events": 397,
+    "bytes": 9153,
+    "origin": "locally-recorded",
+    "license": "MIT OR Apache-2.0",
+    "generator": "scripts/record-corpus.py",
+    "description": "Short writes, command editing, quotes, backslashes and Unicode output",
+    "sha256": "d10d22e9344ebee6fec96e421f4a0fa12b65b3671357e5b54ee279e5a78e0938"
+  },
+  {
+    "name": "typing-v3.cast",
+    "version": 3,
+    "events": 397,
+    "bytes": 9183,
+    "origin": "locally-recorded",
+    "license": "MIT OR Apache-2.0",
+    "generator": "scripts/record-corpus.py",
+    "description": "Short writes, command editing, quotes, backslashes and Unicode output",
+    "sha256": "e88076e90498d5c872038b3be854e7cc4760db0c49c0d2f320ca1e23deae5670"
+  },
+  {
+    "name": "logs-v2.cast",
+    "version": 2,
+    "events": 65,
+    "bytes": 123358,
+    "origin": "locally-recorded",
+    "license": "MIT OR Apache-2.0",
+    "generator": "scripts/record-corpus.py",
+    "description": "Bursts of coloured build-style logs and carriage-return progress updates",
+    "sha256": "4e1589262b0e552af6743923d4144200cd4a98b546ae472a908a1b52a93587ec"
+  },
+  {
+    "name": "logs-v3.cast",
+    "version": 3,
+    "events": 65,
+    "bytes": 123388,
+    "origin": "locally-recorded",
+    "license": "MIT OR Apache-2.0",
+    "generator": "scripts/record-corpus.py",
+    "description": "Bursts of coloured build-style logs and carriage-return progress updates",
+    "sha256": "ec6e7a9b72d6fb0a0dd750f3917a3c3e82cf816b99a2953604fa08e728bf4679"
+  },
+  {
+    "name": "dashboard-v2.cast",
+    "version": 2,
+    "events": 121,
+    "bytes": 534052,
+    "origin": "locally-recorded",
+    "license": "MIT OR Apache-2.0",
+    "generator": "scripts/record-corpus.py",
+    "description": "Full-screen redraws with cursor movement, colours and Unicode",
+    "sha256": "9a93dfd7e4532279dd3f655497da1b63cc8bb9e4925551013d6313efbaf2fcf8"
+  },
+  {
+    "name": "dashboard-v3.cast",
+    "version": 3,
+    "events": 121,
+    "bytes": 534082,
+    "origin": "locally-recorded",
+    "license": "MIT OR Apache-2.0",
+    "generator": "scripts/record-corpus.py",
+    "description": "Full-screen redraws with cursor movement, colours and Unicode",
+    "sha256": "c240ca5c782fad9a723d6b8d4975dcf37a9e533f801b2454fc93686844e56750"
+  }
+]

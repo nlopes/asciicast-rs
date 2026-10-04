@@ -46,7 +46,7 @@ for arm in before after; do
     rg --files "$snapshot/src" | while IFS= read -r file; do shasum -a 256 "$file"; done > "$snapshot/sources.sha256"
     shasum -a 256 "$snapshot/Cargo.toml" "$snapshot/Cargo.lock" >> "$snapshot/sources.sha256"
 done
-shasum -a 256 "$run_directory"/before-* "$run_directory"/after-* "$repo_root"/benches/*.rs "$repo_root"/benches/support/mod.rs "$repo_root"/examples/profile.rs "$repo_root"/tests/properties.rs "$repo_root"/tests/proptest-regressions.txt "$repo_root"/scripts/compare.sh > "$run_directory/hashes.txt"
+shasum -a 256 "$run_directory"/before-* "$run_directory"/after-* "$repo_root"/benches/*.rs "$repo_root"/benches/support/*.rs "$repo_root"/benches/corpus/* "$repo_root"/examples/profile.rs "$repo_root"/tests/properties.rs "$repo_root"/tests/proptest-regressions.txt "$repo_root"/scripts/compare.sh > "$run_directory/hashes.txt"
 
 # Compilation finishes before any timing or allocation measurement starts.
 ASCIICAST_BENCH_OUTPUT="$run_directory/timing" "$run_directory/before-parser" "$filter" --bench --save-baseline before

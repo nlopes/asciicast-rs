@@ -11,6 +11,8 @@ use criterion::{BenchmarkGroup, Criterion, Throughput, measurement::WallTime};
 
 mod support;
 
+const BUFFER_CAPACITIES: [usize; 4] = [8192, 32_768, 65_536, 131_072];
+
 fn bench(
     group: &mut BenchmarkGroup<'_, WallTime>,
     name: &str,
@@ -30,6 +32,42 @@ fn bench(
     });
     if failed.get() {
         return Err(std::io::Error::other("benchmark parse failed").into());
+    }
+    Ok(())
+}
+
+fn bench_file_inputs(
+    group: &mut BenchmarkGroup<'_, WallTime>,
+    case: &support::Recording,
+    apis: &[&str],
+    directory: &std::path::Path,
+    buffers: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Corpus names can contain subdirectories; keep the temporary filename
+    // independent of the benchmark label.
+    let file = tempfile::NamedTempFile::new_in(directory)?;
+    let path = file.path();
+    std::fs::write(path, &case.bytes)?;
+    for api in apis {
+        bench(group, &format!("{api}-file"), case.events, || {
+            support::parse(case.version, api, BufReader::new(File::open(path)?))
+        })?;
+    }
+    if case.version != 1 && buffers {
+        for capacity in BUFFER_CAPACITIES {
+            bench(
+                group,
+                &format!("stream-file-buffer-{capacity}"),
+                case.events,
+                || {
+                    support::parse(
+                        case.version,
+                        "stream",
+                        BufReader::with_capacity(capacity, File::open(path)?),
+                    )
+                },
+            )?;
+        }
     }
     Ok(())
 }
@@ -60,13 +98,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 support::parse(case.version, api, black_box(case.bytes.as_slice()))
             })?;
         }
-        if case.name.ends_with("large") || case.name.ends_with("large-zstd") {
-            let path = files.path().join(&case.name);
-            std::fs::write(&path, &case.bytes)?;
-            for api in apis.iter().filter(|api| **api != "auto") {
-                bench(&mut group, &format!("{api}-file"), case.events, || {
-                    support::parse(case.version, api, BufReader::new(File::open(&path)?))
-                })?;
+        let name = case.name.strip_suffix("-zstd").unwrap_or(&case.name);
+        let buffers = name.ends_with("varied-time") || name.ends_with("output-16384");
+        let corpus = name.starts_with("local-") || name.starts_with("real-");
+        if name.ends_with("large") || buffers || corpus {
+            bench_file_inputs(&mut group, &case, apis, files.path(), buffers || corpus)?;
+        }
+        if buffers {
+            // On compressed inputs this varies the encoded input buffer, not
+            // the decoder's internal output buffer.
+            for capacity in BUFFER_CAPACITIES {
+                bench(
+                    &mut group,
+                    &format!("stream-buffer-{capacity}"),
+                    case.events,
+                    || {
+                        support::parse(
+                            case.version,
+                            "stream",
+                            BufReader::with_capacity(capacity, Cursor::new(&case.bytes)),
+                        )
+                    },
+                )?;
             }
         }
         if case.version != 1 && case.name.ends_with("medium") {

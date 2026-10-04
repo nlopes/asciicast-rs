@@ -6,12 +6,16 @@ use asciicast_rs::{Asciicast, AsciicastVersioned, Error, Reader, Streamable, V1,
 use serde::de::DeserializeOwned;
 use sha2::Digest;
 
+mod workloads;
+
+pub use workloads::additional_recordings;
+
 #[derive(serde::Deserialize)]
 struct CorpusEntry {
     name: String,
     version: u8,
     events: usize,
-    origin: String,
+    bytes: Option<usize>,
     sha256: String,
 }
 
@@ -24,24 +28,30 @@ pub fn digest(bytes: &[u8]) -> String {
     hex
 }
 
-fn corpus_recordings() -> Result<Vec<Recording>, Box<dyn std::error::Error>> {
-    let Some(directory) = std::env::var_os("ASCIICAST_BENCH_CORPUS") else {
-        return Ok(Vec::new());
-    };
-    let directory = std::path::Path::new(&directory);
+pub fn local_recordings() -> Result<Vec<Recording>, Box<dyn std::error::Error>> {
+    corpus_recordings(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("benches/corpus"),
+        "local",
+    )
+}
+
+fn corpus_recordings(
+    directory: &std::path::Path,
+    prefix: &str,
+) -> Result<Vec<Recording>, Box<dyn std::error::Error>> {
     let manifest: Vec<CorpusEntry> =
         serde_json::from_slice(&std::fs::read(directory.join("corpus.json"))?)?;
     let mut cases = Vec::new();
     for row in manifest {
-        if row.origin != "downloaded" {
-            continue;
-        }
         let bytes = std::fs::read(directory.join(&row.name))?;
+        if row.bytes.is_some_and(|expected| expected != bytes.len()) {
+            return Err(format!("corpus size mismatch: {}", row.name).into());
+        }
         if digest(&bytes) != row.sha256 {
             return Err(format!("corpus hash mismatch: {}", row.name).into());
         }
         cases.push(Recording {
-            name: format!("real-{}", row.name),
+            name: format!("{prefix}-{}", row.name),
             version: row.version,
             bytes,
             events: row.events,
@@ -74,16 +84,7 @@ pub fn recording(version: u8, events: usize, style: &str) -> Result<Vec<u8>, ser
             "unicode" => ("o", "構築 — café Ελληνικά 🚀\r\n".repeat(4)),
             "structured" if index % 2 == 0 => ("r", "120x40".to_owned()),
             "structured" => ("x", "0".to_owned()),
-            _ => match index % 100 {
-                0..80 => (
-                    "o",
-                    format!("\x1b[32m[{index:07}]\x1b[0m build module: completed\r\n"),
-                ),
-                80..92 => ("i", "abcdef\r\t".to_owned()),
-                92..96 => ("m", "chapter".to_owned()),
-                96..99 => ("r", "120x40".to_owned()),
-                _ => ("future", "extension".to_owned()),
-            },
+            _ => mixed_payload(index),
         };
         if version == 1 {
             frames.push((0.001, data));
@@ -108,6 +109,19 @@ pub fn recording(version: u8, events: usize, style: &str) -> Result<Vec<u8>, ser
         serde_json::to_writer(&mut bytes, &document)?;
     }
     Ok(bytes)
+}
+
+fn mixed_payload(index: usize) -> (&'static str, String) {
+    match index % 100 {
+        0..80 => (
+            "o",
+            format!("\x1b[32m[{index:07}]\x1b[0m build module: completed\r\n"),
+        ),
+        80..92 => ("i", "abcdef\r\t".to_owned()),
+        92..96 => ("m", "chapter".to_owned()),
+        96..99 => ("r", "120x40".to_owned()),
+        _ => ("future", "extension".to_owned()),
+    }
 }
 
 pub fn long_recording() -> Result<Vec<u8>, serde_json::Error> {
@@ -174,6 +188,9 @@ pub fn recordings() -> Result<Vec<Recording>, Box<dyn std::error::Error>> {
         bytes: format!("\n \t\r\n{comments}").into_bytes(),
         events: 10_000,
     });
+    // Keep all existing inputs byte-for-byte stable for saved baselines.
+    cases.extend(additional_recordings()?);
+    cases.extend(local_recordings()?);
     #[cfg(feature = "zstd")]
     {
         let mut compressed = Vec::new();
@@ -208,7 +225,9 @@ pub fn recordings() -> Result<Vec<Recording>, Box<dyn std::error::Error>> {
             events: 10_000,
         });
     }
-    cases.extend(corpus_recordings()?);
+    if let Some(directory) = std::env::var_os("ASCIICAST_BENCH_CORPUS") {
+        cases.extend(corpus_recordings(std::path::Path::new(&directory), "real")?);
+    }
     Ok(cases)
 }
 
