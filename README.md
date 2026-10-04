@@ -243,6 +243,10 @@ cargo bench --bench allocations -- --save-baseline current
 The Criterion suite covers small and large v1/v2/v3 recordings, eager and
 streaming APIs, automatic detection, Unicode, unknown and structured payloads,
 comments, long events, zstd, first-event latency, and different read buffers.
+Additional v2/v3 cases cover varying absolute times and intervals, scientific
+notation, 1/80/16,384-byte output payloads, and Unicode escaped as UTF-16,
+including surrogate pairs and an escape after a long ASCII prefix. The original
+cases keep their input bytes and names so existing baselines remain comparable.
 Timing reports are saved under `target/criterion/`; allocation measurements
 are saved under `target/allocations/`.
 
@@ -289,11 +293,52 @@ cargo bench --bench parser --no-default-features -- --test
 cargo bench --bench allocations --all-features -- --test
 ```
 
-Optional real recordings can be supplied with
+Six locally captured recordings are included in
+[benches/corpus](benches/corpus/README.md) and run by default. They cover scripted
+typing, build-style logs, and a Unicode dashboard, each serialized as v2 and v3
+from the same PTY capture. The original workload scripts and recordings use the
+repository's MIT OR Apache-2.0 license. No downloads are needed.
+
+To measure just these recordings:
+
+```sh
+cargo bench --bench parser -- 'parser/local-'
+```
+
+[benches/corpus/corpus.json](benches/corpus/corpus.json) records provenance,
+byte counts, event counts, versions, and SHA-256 hashes. The loader checks sizes
+and hashes before benchmarking. Compressed variants are generated when `zstd`
+is enabled. To capture replacements on Unix using Python 3's standard library:
+
+```sh
+python3 scripts/record-corpus.py target/recorded-corpus
+```
+
+Use a new destination and review its files before replacing the checked-in
+corpus. PTY timings and chunk boundaries vary between captures; retain the same
+fixture bytes for both sides of a performance comparison. These demonstrations
+provide varied terminal output, not a complete model of production workloads.
+
+Other optional real recordings can be supplied with
 `ASCIICAST_BENCH_CORPUS=/absolute/path/to/corpus`. The directory must contain the
 recordings and a `corpus.json` array whose entries have `name`, `version`,
-`events`, `origin`, and `sha256` fields. Entries with `origin: "downloaded"` are
-included, and their hashes are checked. Normal tests need no downloads.
+`events`, and `sha256` fields. All entries are included as `real-*` cases alongside
+the built-in corpus, regardless of `origin`. Hashes are checked, along with byte
+counts when a `bytes` field is present. Normal tests need no external corpus.
+
+Use focused runs to keep the broader suite manageable:
+
+```sh
+cargo bench --bench parser -- 'parser/v[23]-(varied-time|exponent-time)/'
+cargo bench --bench parser -- 'parser/v[23]-unicode(-escaped|-late|-late-escaped)?/stream$'
+cargo bench --bench parser -- 'parser/v[23]-(varied-time|output-16384)/stream-(file-)?buffer-'
+```
+
+The new buffer matrix covers 8, 32, 64, and 128 KiB for both in-memory sources
+and cached files. It also covers encoded input buffers in the synthetic zstd
+cases; the decoder's internal output buffer is unchanged. Auto-detection now has
+cached-file cases alongside the eager and streaming APIs. The same generated
+workloads feed allocation measurements and `examples/profile.rs`.
 
 ### Compare a commit with its parent
 
