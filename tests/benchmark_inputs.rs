@@ -151,7 +151,7 @@ fn local_corpus_preserves_captured_output_and_timing() -> Result<(), Box<dyn std
         };
         let v2 = events(&find(2)?.bytes)?;
         let v3 = events(&find(3)?.bytes)?;
-        assert!(!v2.is_empty());
+        assert_ne!(v2, Vec::<Event>::new());
         assert_eq!(v2.len(), v3.len());
         let mut absolute = 0.0;
         let mut output = String::new();

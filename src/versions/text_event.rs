@@ -78,18 +78,28 @@ fn string(raw: &str) -> Option<Cow<'_, str>> {
             b't' => '\t',
             b'u' => {
                 // Terminal control characters are commonly encoded as \u00XX.
-                // Other Unicode escapes (including surrogate pairs) use serde.
-                let digits = rest.strip_prefix("00")?.get(..2)?;
-                let character = u8::from_str_radix(digits, 16).ok()?;
-                // from_str_radix accepts a leading '+', which JSON does not.
-                if !digits.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-                    return None;
+                if let Some(digits) = rest.strip_prefix("00") {
+                    let digits = digits.get(..2)?;
+                    let character = u8::from_str_radix(digits, 16).ok()?;
+                    // from_str_radix accepts a leading '+', which JSON does not.
+                    if !digits.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+                        return None;
+                    }
+                    rest = rest.get(4..)?;
+                    char::from(character)
+                } else {
+                    let (character, consumed) = unicode_escape(rest)?;
+                    rest = rest.get(consumed..)?;
+                    character
                 }
-                rest = rest.get(4..)?;
-                char::from(character)
             }
             _ => return None,
         });
+        // Unicode-escaped text often has adjacent escapes with no literal
+        // span to copy. Avoid a memchr call for each of those empty spans.
+        if rest.starts_with('\\') {
+            continue;
+        }
         let Some(next) = memchr::memchr2(b'"', b'\\', rest.as_bytes()) else {
             decoded.push_str(rest);
             return Some(Cow::Owned(decoded));
@@ -97,5 +107,45 @@ fn string(raw: &str) -> Option<Cow<'_, str>> {
         let (text, tail) = rest.split_at(next);
         decoded.push_str(text);
         rest = tail;
+    }
+}
+
+// The leading \u has already been consumed. Invalid escapes return None so
+// the original event deserializer supplies the same error and source position.
+// Keep full Unicode handling out of the common terminal-control decoding loop.
+#[inline(never)]
+fn unicode_escape(rest: &str) -> Option<(char, usize)> {
+    let first = hex_quad(rest)?;
+    let (scalar, consumed) = if (0xd800..=0xdbff).contains(&first) {
+        let rest = rest.get(4..)?.strip_prefix("\\u")?;
+        let second = hex_quad(rest)?;
+        if !(0xdc00..=0xdfff).contains(&second) {
+            return None;
+        }
+        (
+            0x1_0000 + ((u32::from(first) - 0xd800) << 10) + (u32::from(second) - 0xdc00),
+            10,
+        )
+    } else {
+        (u32::from(first), 4)
+    };
+    // Also rejects an unpaired low surrogate.
+    Some((char::from_u32(scalar)?, consumed))
+}
+
+fn hex_quad(rest: &str) -> Option<u16> {
+    let &[a, b, c, d, ..] = rest.as_bytes() else {
+        return None;
+    };
+    let value = (hex_digit(a)? << 12) | (hex_digit(b)? << 8) | (hex_digit(c)? << 4) | hex_digit(d)?;
+    Some(value)
+}
+
+fn hex_digit(byte: u8) -> Option<u16> {
+    match byte {
+        b'0'..=b'9' => Some(u16::from(byte - b'0')),
+        b'a'..=b'f' => Some(u16::from(byte - b'a' + 10)),
+        b'A'..=b'F' => Some(u16::from(byte - b'A' + 10)),
+        _ => None,
     }
 }

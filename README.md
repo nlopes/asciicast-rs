@@ -275,9 +275,13 @@ machine and recording.
 The million-event v3 case drops from 4.30 million to 0.98 million allocations.
 Escaped strings reserve their encoded length to avoid growth while decoding;
 this raised peak requested heap for that eager case by about 5%, while streaming
-heap usage decreased. Uncommon event shapes and Unicode escapes outside
-`\u00XX` retain the general serde parser. Numeric parsing always uses serde to
-preserve timestamp rounding and validation.
+heap usage decreased. Unicode escapes, including surrogate pairs, decode
+directly into the returned string. Uncommon event shapes and malformed input
+retain the general serde parser. Numeric parsing always uses serde to preserve
+timestamp rounding and validation.
+
+Inputs with many Unicode escapes can retain more spare string capacity during
+eager parsing because the encoded text can be much larger than its decoded form.
 
 To measure the main streaming cases locally:
 

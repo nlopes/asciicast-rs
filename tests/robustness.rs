@@ -126,3 +126,55 @@ fn text_events_accept_json_whitespace_and_escapes() -> Result<(), Error> {
     assert_eq!(V3::parse_event(line)?.as_output(), Some(expected));
     Ok(())
 }
+
+#[test]
+fn malformed_unicode_escapes_keep_json_error_details() -> Result<(), Box<dyn std::error::Error>> {
+    for prefix in [
+        String::new(),
+        "x".repeat(4096),
+        r"\u001b\n\u0100".to_owned(),
+    ] {
+        for malformed in [
+            r"\u",
+            r"\u0",
+            r"\u01",
+            r"\u010",
+            r"\u+100",
+            r"\u01+0",
+            r"\u0x10",
+            r"\uGGGG",
+            r"\u☃",
+            r"\uD800",
+            r"\udfff",
+            r"\uD800\u0041",
+            r"\uD800\uD800",
+            r"\uDC00\uD800",
+            r"\uD800\n",
+            r"\uD800x",
+            r"\uD800\uDC",
+            r"\uD800\u+100",
+            r"\u0100\q",
+            r"\u0100\",
+        ] {
+            let line = format!(" \t[0.125,\"o\",\"{prefix}{malformed}\"]\r\n");
+            let reference = serde_json::from_str::<(f64, String, String)>(&line)
+                .err()
+                .ok_or("expected malformed reference JSON")?;
+            for result in [
+                V2::parse_event(&line).map(|_| ()),
+                V3::parse_event(&line).map(|_| ()),
+            ] {
+                let Err(Error::Json(actual)) = result else {
+                    return Err(format!("expected JSON error for {malformed:?}").into());
+                };
+                assert_eq!(actual.classify(), reference.classify());
+                assert_eq!(
+                    (actual.line(), actual.column()),
+                    (reference.line(), reference.column())
+                );
+                assert_eq!(actual.to_string(), reference.to_string());
+            }
+        }
+    }
+    Ok(())
+}

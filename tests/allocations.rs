@@ -68,19 +68,25 @@ fn streaming_memory_stays_bounded_for_many_small_events() -> Result<(), Box<dyn 
 
 #[test]
 fn escaped_output_allocates_only_the_returned_string() -> Result<(), Error> {
-    let line = r#"[0.125,"o","\u001b[32mbuild: café 🚀\r\n\u001b[0m"]"#;
-    for version in [2, 3] {
-        let mut result = Ok(());
-        let info = allocation_counter::measure(|| {
-            result = if version == 2 {
-                V2::parse_event(line).map(|event| drop(std::hint::black_box(event)))
-            } else {
-                V3::parse_event(line).map(|event| drop(std::hint::black_box(event)))
-            };
-        });
-        result?;
-        assert_eq!(info.count_total, 1, "v{version}: {info:?}");
-        assert_eq!(info.bytes_current, 0);
+    for payload in [
+        r"\u001b[32mbuild: café 🚀\r\n\u001b[0m".to_owned(),
+        r"\u0100\u03a9\u6771\ud83d\ude80".to_owned(),
+        format!(r"{}\n\u0100\uDBFF\uDFFF", "x".repeat(4096)),
+    ] {
+        let line = format!(r#"[0.125,"o","{payload}"]"#);
+        for version in [2, 3] {
+            let mut result = Ok(());
+            let info = allocation_counter::measure(|| {
+                result = if version == 2 {
+                    V2::parse_event(&line).map(|event| drop(std::hint::black_box(event)))
+                } else {
+                    V3::parse_event(&line).map(|event| drop(std::hint::black_box(event)))
+                };
+            });
+            result?;
+            assert_eq!(info.count_total, 1, "v{version}: {info:?}");
+            assert_eq!(info.bytes_current, 0);
+        }
     }
     Ok(())
 }

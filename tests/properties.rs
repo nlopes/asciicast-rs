@@ -122,6 +122,39 @@ proptest! {
     }
 
     #[test]
+    fn unicode_escaped_payloads_match_literal_payloads(
+        data in text(),
+        prefix in prop::sample::select(vec![String::new(), "x".repeat(4096), "\r\n\"\\café🚀".to_owned()]),
+        code in prop::sample::select(vec!["o", "i", "m", "future"]),
+        uppercase in any::<bool>(),
+    ) {
+        let mut escaped = serde_json::to_string(&prefix)?;
+        escaped.pop(); // Remove the closing quote before appending UTF-16 escapes.
+        for unit in data.encode_utf16() {
+            if uppercase { write!(&mut escaped, "\\u{unit:04X}")?; }
+            else { write!(&mut escaped, "\\u{unit:04x}")?; }
+        }
+        escaped.push('"');
+        let escaped = format!("[0.125,\"{code}\",{escaped}]");
+        let literal = serde_json::to_string(&(0.125, code, format!("{prefix}{data}")))?;
+        prop_assert_eq!(V2::parse_event(&escaped)?, V2::parse_event(&literal)?);
+        prop_assert_eq!(V3::parse_event(&escaped)?, V3::parse_event(&literal)?);
+    }
+
+    #[test]
+    fn arbitrary_utf16_escape_sequences_match_serde(units in prop::collection::vec(any::<u16>(), 0..40)) {
+        let mut line = String::from(r#"[0.125,"o","prefix\n"#);
+        for unit in units { write!(&mut line, "\\u{unit:04x}")?; }
+        line.push_str(r#"suffix"]"#);
+        let reference: Result<(f64, String, String), _> = serde_json::from_str(&line);
+        let expected = reference.as_ref().ok().map(|(_, _, data)| data.as_str());
+        let v2 = V2::parse_event(&line);
+        let v3 = V3::parse_event(&line);
+        prop_assert_eq!(v2.as_ref().ok().and_then(|event| event.as_output()), expected);
+        prop_assert_eq!(v3.as_ref().ok().and_then(|event| event.as_output()), expected);
+    }
+
+    #[test]
     fn structured_v3_payloads_preserve_values(cols in 1_u16..=u16::MAX, rows in 1_u16..=u16::MAX, status in any::<i32>()) {
         let resize = V3::parse_event(&format!("[0.125,\"r\",\"{cols}x{rows}\"]"))?;
         prop_assert_eq!(resize.as_resize(), Some(asciicast_rs::common::Resize { cols, rows }));
@@ -229,6 +262,22 @@ fn all_single_utf16_escapes_match_unicode_scalars() -> Result<(), Box<dyn std::e
             assert!(V2::parse_event(&line).is_err());
             assert!(V3::parse_event(&line).is_err());
         }
+    }
+    Ok(())
+}
+
+#[test]
+fn surrogate_pair_boundaries_preserve_scalars() -> Result<(), Error> {
+    for (escaped, expected) in [
+        (r"\ud800\udc00", "\u{10000}"),
+        (r"\ud800\udfff", "\u{103ff}"),
+        (r"\uDBFF\uDC00", "\u{10fc00}"),
+        (r"\uDBFF\uDFFF", "\u{10ffff}"),
+        (r"\ud7ff\uE000\uffff", "\u{d7ff}\u{e000}\u{ffff}"),
+    ] {
+        let line = format!(r#"[0.125,"o","{escaped}"]"#);
+        assert_eq!(V2::parse_event(&line)?.as_output(), Some(expected));
+        assert_eq!(V3::parse_event(&line)?.as_output(), Some(expected));
     }
     Ok(())
 }
