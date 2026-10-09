@@ -31,7 +31,7 @@ criterion = { version = "0.8.2", default-features = false, features = ["cargo_be
 plotters = { version = "0.3.7", default-features = false, features = ["svg_backend"] }
 proptest = { version = "1.11", default-features = false, features = ["std"] }
 rustc-demangle = "0.1.28"
-sha2 = "0.10.9"
+sha2 = "0.11.0"
 tempfile = "3"
 # Pure-Rust zstd encoder, used only to build compressed inputs in the zstd
 # tests. Integration tests are separate crates and cannot name the optional
