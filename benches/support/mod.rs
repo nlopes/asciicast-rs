@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use std::{hint::black_box, io::BufRead};
+use std::{fmt::Write as _, hint::black_box, io::BufRead};
 
 use asciicast_rs::{Asciicast, AsciicastVersioned, Error, Reader, Streamable, V1, V2, V3, v2, v3};
 use serde::de::DeserializeOwned;
@@ -16,7 +16,12 @@ struct CorpusEntry {
 }
 
 pub fn digest(bytes: &[u8]) -> String {
-    format!("{:x}", sha2::Sha256::digest(bytes))
+    let mut hex = String::with_capacity(64);
+    for byte in sha2::Sha256::digest(bytes) {
+        // Formatting a byte into a String cannot fail.
+        let _ = write!(hex, "{byte:02x}");
+    }
+    hex
 }
 
 fn corpus_recordings() -> Result<Vec<Recording>, Box<dyn std::error::Error>> {
