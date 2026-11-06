@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-11-06
+
+### Changed
+- Improve v2 and v3 parsing speed and reduce temporary allocations in both
+  streaming and eager parsers, including for event text containing Unicode
+  escapes and surrogate pairs.
+- Eager parsing can use more memory for heavily escaped event text because
+  decoded strings retain spare capacity. Prefer streaming when processing large
+  recordings with limited memory.
+
 ## [0.4.2] - 2026-10-04
 
 ### Changed
@@ -14,10 +24,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   throughput for Unicode-heavy recordings. Discard oversized event-line buffers
   after parsing so streaming readers do not retain them between events.
 - Reduce peak memory when detecting and parsing v1 recordings.
-
-### Added
-- Add Rust benchmarks, property tests, allocation checks, and tooling for
-  comparing parser revisions and collecting flamegraphs.
 
 ## [0.4.1] - 2026-10-03
 
@@ -71,7 +77,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release with support for all 3 formats of `asciicast` (v1, v2, v3)
 
-[Unreleased]: https://github.com/nlopes/asciicast-rs/compare/v0.4.2...HEAD
+[Unreleased]: https://github.com/nlopes/asciicast-rs/compare/v0.4.3...HEAD
+[0.4.3]: https://github.com/nlopes/asciicast-rs/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/nlopes/asciicast-rs/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/nlopes/asciicast-rs/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/nlopes/asciicast-rs/compare/v0.3.0...v0.4.0
